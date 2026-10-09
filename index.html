@@ -177,6 +177,57 @@
   .terms li { counter-increment: t; position: relative; padding: 18px 20px 18px 64px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); }
   .terms li::before { content: counter(t); position: absolute; left: 20px; top: 16px; width: 30px; height: 30px; border-radius: 50%; background: var(--green); color: #fff; display: grid; place-items: center; font-weight: 600; font-size: .9rem; }
 
+  /* Booking enquiry */
+
+  .enquiry { max-width: 720px; margin-top: 32px; }
+  .enquiry fieldset { border: 0; padding: 0; margin: 0 0 36px; min-width: 0; }
+  .enquiry legend { font-family: Fraunces, serif; font-weight: 600; font-size: 1.35rem; color: var(--green-deep); margin-bottom: 14px; padding: 0; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  .form-grid.wide-right { grid-template-columns: 1fr 2fr; }
+  @media (max-width: 560px) { .form-grid, .form-grid.wide-right { grid-template-columns: 1fr; } }
+  .field { display: block; margin-bottom: 16px; }
+  .field > span { display: block; font-weight: 500; font-size: .95rem; margin-bottom: 6px; }
+  .field em { font-style: normal; color: var(--muted); font-weight: 400; }
+  .enquiry input, .enquiry select, .enquiry textarea {
+    width: 100%; font: inherit; color: var(--ink);
+    padding: 11px 14px; background: var(--cream);
+    border: 1px solid #d3ccbb; border-radius: 10px;
+  }
+  .enquiry textarea { resize: vertical; }
+  .enquiry input:focus, .enquiry select:focus, .enquiry textarea:focus { outline: 2px solid var(--green); outline-offset: 1px; border-color: var(--green); }
+  .enquiry .invalid { border-color: #b3261e; }
+  .check { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 16px; cursor: pointer; }
+  .enquiry .check input { width: 20px; height: 20px; margin: 3px 0 0; accent-color: var(--green); flex: none; }
+  .hint { color: var(--muted); font-size: .92rem; margin: -6px 0 16px; }
+
+  .stay { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end; margin-bottom: 14px; }
+  .stay .field { margin: 0; }
+  .stay-remove { width: 46px; height: 46px; border: 1px solid #d3ccbb; border-radius: 10px; background: none; color: var(--muted); font-size: 1.4rem; line-height: 1; cursor: pointer; }
+  .stay-remove:hover { color: var(--ink); border-color: var(--ink); }
+  .stay-remove[hidden] { display: block; visibility: hidden; }
+  @media (max-width: 560px) { .stay { grid-template-columns: 1fr 1fr 46px; gap: 8px; } }
+
+  .btn-outline { background: none; border: 1px solid var(--green); color: var(--green); font: inherit; font-weight: 600; cursor: pointer; padding: 10px 20px; }
+  .btn-outline:hover { background: rgba(47, 74, 52, .08); }
+
+  .estimate { background: var(--cream); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 24px 8px; margin: 0 0 36px; }
+  .estimate-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+  .estimate-head span { font-weight: 600; }
+  .estimate-head strong { font-family: Fraunces, serif; font-size: 2rem; color: var(--green); line-height: 1; }
+  .estimate ul { list-style: none; padding: 0; margin: 12px 0 16px; }
+  .estimate li { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; border-top: 1px solid var(--line); font-size: .95rem; }
+  .estimate li span:first-child { color: var(--muted); }
+  .estimate .hint { margin: 0 0 14px; }
+
+  .honey { position: absolute; left: -9999px; }
+  .form-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+  .form-foot .btn { border: 0; font: inherit; font-weight: 600; cursor: pointer; padding: 14px 28px; }
+  .form-foot .btn:disabled { opacity: .6; cursor: default; }
+  .form-status { margin: 0; font-size: .95rem; }
+  .form-status.error { color: #b3261e; }
+  .form-done { background: var(--cream); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px; max-width: 720px; margin-top: 32px; }
+  .form-done h3 { color: var(--green-deep); }
+
   /* Contact */
 
   .contact { display: grid; grid-template-columns: 1fr 1.2fr; gap: 40px; }
@@ -203,6 +254,7 @@
       <li><a class="link" href="#prices">Prices</a></li>
       <li><a class="link" href="#hours">Opening hours</a></li>
       <li><a class="link" href="#requirements">Requirements &amp; terms</a></li>
+      <li><a class="link" href="#book">Book</a></li>
       <li><a class="link" href="#contact">Contact</a></li>
     </ul>
   </div>
@@ -218,7 +270,7 @@
     <p>Small, family-run cat boarding in<br>West Bridgford, Nottingham.</p>
     <div class="actions">
       <a class="btn btn-primary" href="tel:07904683968">Call 07904 683968</a>
-      <a class="btn btn-ghost" href="#prices">See prices</a>
+      <a class="btn btn-ghost" href="#book">Booking enquiry</a>
     </div>
   </div>
 </header>
@@ -238,7 +290,7 @@
       <h2>About us</h2>
       <div class="prose">
       <p>We started Queens Cattery in 2006 with a single kennel in our garden, after a poor boarding experience with our own cats. We wanted somewhere we'd be happy to leave them.</p>
-      <p>We grew to 6 kennels in 2008 and added 8 more in 2010. We're still small and family-run, and we hold a 5-star rating from Rushcliffe Borough Council. You're welcome to visit and look around before you book.</p>
+      <p>We grew to 6 kennels in 2008 and added 8 more in 2010. We're still small and family-run, and we hold a 5-star rating from Rushcliffe Borough Council. You're welcome to look around before you book. Visits are by appointment.</p>
       </div>
     </div>
   </section>
@@ -251,7 +303,8 @@
         <ul class="ticks">
           <li>Each kennel has a raised sleeping house, shelves and a scratching post</li>
           <li>An outdoor run with views of the garden</li>
-          <li>Some kennels open up into larger pens for families of more than 2 cats, subject to availability</li>
+          <li>Up to 2 cats per kennel. Any kennel can be joined to the next one to make a larger pen, subject to availability</li>
+          <li>We provide meat and biscuits. Please bring any special diet or medication your cat needs</li>
           <li>Licensed by Rushcliffe Borough Council</li>
         </ul>
       </div>
@@ -276,10 +329,10 @@
         </div>
         <div class="card">
           <h3>More than 2 cats</h3>
-          <div class="price"><a href="#contact">Enquire</a> <small>for a quote</small></div>
+          <div class="price"><a href="#book">Enquire</a> <small>for a quote</small></div>
         </div>
       </div>
-      <p class="note">A non-refundable deposit of £30 per cat is due when you book. The rest is due on arrival.</p>
+      <p class="note">Prices are per kennel, with up to 2 cats in each. For example, 3 cats in 2 kennels is £41 a night. A non-refundable deposit of £30 per cat is due when you book, and the rest is due on arrival.</p>
     </div>
   </section>
 
@@ -287,7 +340,7 @@
     <div class="wrap split">
       <div>
         <h2>Opening hours</h2>
-        <p class="lead">Drop-off and collection times.</p>
+        <p class="lead">Drop-off and collection times. Visits are by appointment.</p>
       </div>
       <table class="hours">
         <tr><td>Monday to Saturday</td><td>9am – 5pm</td></tr>
@@ -333,7 +386,101 @@
     </div>
   </section>
 
-  <section id="contact" class="alt">
+  <section id="book" class="alt">
+    <div class="wrap">
+      <h2>Booking enquiry</h2>
+      <p class="lead">Tell us when you need us and we'll check availability. This sends us an enquiry. Your booking is confirmed once we reply and you've paid the deposit.</p>
+
+      <form id="enquiry" class="enquiry" novalidate>
+
+        <fieldset>
+          <legend>Your cats</legend>
+          <div class="form-grid wide-right">
+            <label class="field">
+              <span>Number of cats</span>
+              <select name="cats" id="cat-count">
+                <option>1</option><option>2</option><option>3</option>
+                <option>4</option><option>5</option><option>6</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Kennels</span>
+              <select name="kennels" id="kennel-count"></select>
+            </label>
+          </div>
+          <label class="check" id="join-wrap" hidden>
+            <input type="checkbox" name="join" id="join">
+            <span>Join the kennels into one larger pen, if available</span>
+          </label>
+          <label class="field">
+            <span>Names and ages <em>(optional)</em></span>
+            <input type="text" name="catDetails" placeholder="e.g. Tilly, 4 and Jasper, 9">
+          </label>
+          <p class="hint">More than 6 cats? Please call us on <a href="tel:07904683968">07904 683968</a>.</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>Dates</legend>
+          <div id="stays"></div>
+          <button type="button" class="btn btn-outline" id="add-stay">Add another stay</button>
+        </fieldset>
+
+        <div class="estimate" aria-live="polite">
+          <div class="estimate-head">
+            <span>Estimated cost</span>
+            <strong id="est-total">–</strong>
+          </div>
+          <ul id="est-lines"></ul>
+          <p class="hint">An estimate only. We'll confirm the price when we reply.</p>
+        </div>
+
+        <fieldset>
+          <legend>Food and medication</legend>
+          <p class="hint">We provide meat and biscuits. If your cat needs a special diet or medication, please bring it with you.</p>
+          <label class="field">
+            <span>Special diet or medication <em>(optional)</em></span>
+            <textarea name="diet" rows="3"></textarea>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Your details</legend>
+          <label class="field">
+            <span>Name</span>
+            <input type="text" name="name" autocomplete="name" required>
+          </label>
+          <div class="form-grid">
+            <label class="field">
+              <span>Email</span>
+              <input type="email" name="email" autocomplete="email">
+            </label>
+            <label class="field">
+              <span>Phone</span>
+              <input type="tel" name="phone" autocomplete="tel">
+            </label>
+          </div>
+          <p class="hint">Give us an email address or phone number, or both.</p>
+          <label class="check">
+            <input type="checkbox" name="visit">
+            <span>I'd like to book a visit first</span>
+          </label>
+          <label class="field">
+            <span>Anything else <em>(optional)</em></span>
+            <textarea name="message" rows="3"></textarea>
+          </label>
+        </fieldset>
+
+        <input type="text" name="_honey" class="honey" tabindex="-1" autocomplete="off" aria-hidden="true">
+
+        <div class="form-foot">
+          <button type="submit" class="btn btn-primary">Send enquiry</button>
+          <p class="form-status" id="form-status" role="status"></p>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section id="contact">
     <div class="wrap contact">
       <div>
         <h2>Contact us</h2>
@@ -394,6 +541,192 @@
     });
   }, { rootMargin: '-45% 0px -50% 0px' });
   document.querySelectorAll('main section').forEach(s => observer.observe(s));
+
+  // Booking enquiry
+
+  const ENQUIRY_URL = 'https://formsubmit.co/ajax/russ_e@hotmail.co.uk';
+  const SINGLE = 16;
+  const SHARED = 25;
+
+  const form = document.getElementById('enquiry');
+  const catsEl = document.getElementById('cat-count');
+  const kennelsEl = document.getElementById('kennel-count');
+  const joinWrap = document.getElementById('join-wrap');
+  const staysEl = document.getElementById('stays');
+  const statusEl = document.getElementById('form-status');
+  const f = form.elements;
+
+  const gbp = n => '£' + n.toLocaleString('en-GB');
+  const pad = n => String(n).padStart(2, '0');
+  const isoDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const today = isoDate(new Date());
+  const niceDate = iso => new Date(iso + 'T12:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  const nightsBetween = (from, to) => Math.round((Date.parse(to) - Date.parse(from)) / 86400000);
+
+  // A kennel holds 1 or 2 cats, so k kennels for n cats means n - k shared and 2k - n single
+
+  const nightly = (cats, kennels) => (cats - kennels) * SHARED + (2 * kennels - cats) * SINGLE;
+
+  const kennelLabel = (cats, k) => {
+    const shared = cats - k, single = 2 * k - cats;
+    const parts = [];
+    if (shared) parts.push(cats === 2 ? 'sharing' : `${shared} shared`);
+    if (single && cats > 1) parts.push(cats === k ? 'one each' : `${single} single`);
+    const detail = parts.length ? ` (${parts.join(', ')})` : '';
+    return `${k} kennel${k > 1 ? 's' : ''}${detail}, ${gbp(nightly(cats, k))} a night`;
+  };
+
+  const renderKennels = () => {
+    const cats = +catsEl.value;
+    const prev = +kennelsEl.value;
+    const min = Math.ceil(cats / 2);
+    kennelsEl.innerHTML = '';
+    for (let k = min; k <= cats; k++) kennelsEl.add(new Option(kennelLabel(cats, k), k));
+    kennelsEl.value = prev >= min && prev <= cats ? prev : min;
+    renderJoin();
+  };
+
+  const renderJoin = () => {
+    joinWrap.hidden = +kennelsEl.value < 2;
+    if (joinWrap.hidden) f.join.checked = false;
+  };
+
+  const addStay = () => {
+    const row = document.createElement('div');
+    row.className = 'stay';
+    row.innerHTML = `
+      <label class="field"><span>Drop-off</span><input type="date" class="stay-from" min="${today}" required></label>
+      <label class="field"><span>Collection</span><input type="date" class="stay-to" min="${today}" required></label>
+      <button type="button" class="stay-remove" aria-label="Remove this stay">×</button>`;
+    staysEl.append(row);
+    renderStays();
+  };
+
+  const renderStays = () => {
+    const rows = [...staysEl.children];
+    rows.forEach(row => {
+      row.querySelector('.stay-remove').hidden = rows.length === 1;
+      const from = row.querySelector('.stay-from');
+      const to = row.querySelector('.stay-to');
+      to.min = from.value || today;
+    });
+    renderEstimate();
+  };
+
+  const readStays = () => [...staysEl.children].map(row => {
+    const from = row.querySelector('.stay-from').value;
+    const to = row.querySelector('.stay-to').value;
+    const nights = from && to ? nightsBetween(from, to) : 0;
+    return { from, to, nights, valid: nights > 0 };
+  });
+
+  const renderEstimate = () => {
+    const rate = nightly(+catsEl.value, +kennelsEl.value);
+    const stays = readStays();
+    const lines = document.getElementById('est-lines');
+    lines.innerHTML = '';
+    let total = 0;
+    stays.forEach((s, i) => {
+      if (!s.valid) return;
+      const cost = s.nights * rate;
+      total += cost;
+      const li = document.createElement('li');
+      li.innerHTML = `<span>${stays.length > 1 ? `Stay ${i + 1}, ` : ''}${s.nights} night${s.nights > 1 ? 's' : ''} at ${gbp(rate)}</span><span>${gbp(cost)}</span>`;
+      lines.append(li);
+    });
+    document.getElementById('est-total').textContent = total ? gbp(total) : '–';
+  };
+
+  catsEl.addEventListener('change', () => { renderKennels(); renderEstimate(); });
+  kennelsEl.addEventListener('change', () => { renderJoin(); renderEstimate(); });
+  staysEl.addEventListener('input', renderStays);
+  staysEl.addEventListener('click', e => {
+    if (!e.target.matches('.stay-remove')) return;
+    e.target.closest('.stay').remove();
+    renderStays();
+  });
+  document.getElementById('add-stay').addEventListener('click', addStay);
+
+  renderKennels();
+  addStay();
+
+  const fail = (msg, el) => {
+    statusEl.textContent = msg;
+    statusEl.className = 'form-status error';
+    if (el) { el.classList.add('invalid'); el.focus(); }
+  };
+
+  form.addEventListener('input', e => e.target.classList.remove('invalid'));
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    form.querySelectorAll('.invalid').forEach(el => el.classList.remove('invalid'));
+    if (f._honey.value) return;
+
+    const name = f.name.value.trim();
+    const email = f.email.value.trim();
+    const phone = f.phone.value.trim();
+    const stays = readStays();
+
+    const badStay = stays.findIndex(s => !s.valid);
+    if (badStay > -1) {
+      const row = staysEl.children[badStay];
+      const el = stays[badStay].from ? row.querySelector('.stay-to') : row.querySelector('.stay-from');
+      return fail('Please choose a drop-off date and a later collection date.', el);
+    }
+    if (!name) return fail('Please tell us your name.', f.name);
+    if (!email && !phone) return fail('Please give us an email address or phone number.', f.email);
+    if (email && !f.email.checkValidity()) return fail('Please check your email address.', f.email);
+
+    const cats = +catsEl.value;
+    const kennels = +kennelsEl.value;
+    const data = {
+      _subject: `Booking enquiry from ${name}`,
+      _template: 'table',
+      _captcha: 'false',
+      Name: name,
+      Email: email || '–',
+      Phone: phone || '–',
+      Cats: cats,
+      Kennels: kennelLabel(cats, kennels).replace(/, £.*$/, ''),
+      'Join kennels': f.join.checked ? 'Yes, if available' : 'No',
+      'Names and ages': f.catDetails.value.trim() || '–',
+      'Diet or medication': f.diet.value.trim() || '–',
+      'Visit first': f.visit.checked ? 'Yes' : 'No',
+      Message: f.message.value.trim() || '–'
+    };
+    if (email) data._replyto = email;
+    stays.forEach((s, i) => {
+      data[`Stay ${i + 1}`] = `${niceDate(s.from)} to ${niceDate(s.to)} (${s.nights} night${s.nights > 1 ? 's' : ''})`;
+    });
+
+    const button = form.querySelector('[type=submit]');
+    button.disabled = true;
+    statusEl.className = 'form-status';
+    statusEl.textContent = 'Sending…';
+
+    try {
+      const res = await fetch(ENQUIRY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(data)
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || String(json.success) !== 'true') throw new Error(json.message || res.status);
+
+      const done = document.createElement('div');
+      done.className = 'form-done';
+      done.setAttribute('role', 'status');
+      done.innerHTML = `<h3>Thanks, we've got your enquiry</h3>
+        <p>We'll check availability and get back to you${email ? ' by email' : ''}${email && phone ? ' or phone' : phone ? ' by phone' : ''} soon. Your booking is confirmed once we reply and you've paid the deposit.</p>
+        <p class="hint" style="margin:0">If it's urgent, call or text us on <a href="tel:07904683968">07904 683968</a>.</p>`;
+      form.replaceWith(done);
+      done.scrollIntoView({ block: 'center' });
+    } catch {
+      button.disabled = false;
+      fail('Sorry, that didn\'t send. Please call or text us on 07904 683968, or email russ_e@hotmail.co.uk.');
+    }
+  });
 </script>
 
 </body>
