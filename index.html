@@ -211,7 +211,10 @@
   .food-note { background: var(--cream); border-left: 3px solid var(--green); border-radius: 0 10px 10px 0; padding: 12px 16px; font-size: .95rem; margin: 0 0 18px; }
 
   .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-  @media (max-width: 560px) { .choices { grid-template-columns: 1fr; } }
+  .choices.two { grid-template-columns: repeat(2, 1fr); margin-bottom: 24px; }
+  @media (max-width: 560px) { .choices, .choices.two { grid-template-columns: 1fr; } }
+  .field-label { font-weight: 500; font-size: .95rem; margin: 0 0 6px; }
+  .choices.invalid .choice { border-color: #b3261e; }
   .choice { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border: 1px solid #d3ccbb; border-radius: 10px; background: var(--cream); cursor: pointer; font-weight: 500; }
   .enquiry .choice input { width: 18px; height: 18px; margin: 0; accent-color: var(--green); flex: none; }
   .choice:has(input:checked) { border-color: var(--green); box-shadow: inset 0 0 0 1px var(--green); background: #eef2ea; }
@@ -371,7 +374,7 @@
           <div class="price"><a href="#book">Enquire</a> <small>for a quote</small></div>
         </div>
       </div>
-      <p class="note">Prices are per kennel, with up to 2 cats in each. For example, 3 cats in 2 kennels is £41 a night. Nights over Christmas Day, Boxing Day and New Year's Day are charged at double rate. A non-refundable deposit of £30 per cat is due when you book, and the rest is due on arrival.</p>
+      <p class="note">Prices are per kennel, with up to 2 cats in each. For example, 3 cats in 2 kennels is £41 a night. Nights over Christmas Day, Boxing Day and New Year's Day are charged at double rate. New customers pay a non-refundable deposit of £30 per cat when they book, and the rest is due on arrival.</p>
     </div>
   </section>
 
@@ -404,7 +407,7 @@
       <h3 class="subhead">Booking terms</h3>
       <ol class="terms">
         <li>Cats are boarded at the owner's risk.</li>
-        <li>A £30 deposit per cat is due at booking and is non-refundable.</li>
+        <li>New customers pay a £30 deposit per cat at booking, which is non-refundable.</li>
         <li>Boarding fees are due on arrival.</li>
         <li>Nights over Christmas Day, Boxing Day and New Year's Day are charged at double rate. We're closed for drop-off and collection on these days.</li>
         <li>You can cancel free of charge up to 14 days before drop-off. Later cancellations pay the full booking fee.</li>
@@ -416,7 +419,7 @@
   <section id="book" class="alt">
     <div class="wrap">
       <h2>Booking enquiry</h2>
-      <p class="lead">Book a stay, arrange a visit or both. We'll check availability and get back to you. A booking is confirmed once we reply and you've paid the deposit.</p>
+      <p class="lead">Book a stay, arrange a visit or both. We'll check availability and get back to you. A booking is confirmed once we reply, and once new customers have paid the deposit.</p>
 
       <form id="enquiry" class="enquiry" novalidate>
 
@@ -459,6 +462,11 @@
 
         <fieldset class="form-section" data-for="stay">
           <legend>Your cats</legend>
+          <p class="field-label">Have your cats stayed with us before?</p>
+          <div class="choices two">
+            <label class="choice"><input type="radio" name="returning" value="yes"><span>Yes</span></label>
+            <label class="choice"><input type="radio" name="returning" value="no"><span>No, this is their first stay</span></label>
+          </div>
           <div class="form-grid wide-right">
             <label class="field">
               <span>Number of cats</span>
@@ -592,8 +600,10 @@
   // Booking enquiry
 
   const ENQUIRY_URL = 'https://formsubmit.co/ajax/russ_e@hotmail.co.uk';
+  const REPLY_URL = 'https://queenscattery.co.uk/reply.html';
   const SINGLE = 16;
   const SHARED = 25;
+  const DEPOSIT = 30;
 
   // Closed for drop-off and collection, and nights over these days cost double
 
@@ -628,6 +638,10 @@
   // A kennel holds 1 or 2 cats, so k kennels for n cats means n - k shared and 2k - n single
 
   const nightly = (cats, kennels) => (cats - kennels) * SHARED + (2 * kennels - cats) * SINGLE;
+
+  // Holiday nights cost double, so they count twice
+
+  const stayCost = (s, rate) => (s.nights + s.holidays) * rate;
 
   const kennelLabel = (cats, k) => {
     const shared = cats - k, single = 2 * k - cats;
@@ -717,7 +731,7 @@
     stays.forEach(s => {
       if (!s.valid) return;
       const normal = s.nights - s.holidays;
-      const cost = (s.nights + s.holidays) * rate;
+      const cost = stayCost(s, rate);
       total += cost;
       line(`${shortDate(s.from)} to ${shortDate(s.to)}`, gbp(cost), 'est-stay');
       if (normal) line(`${plural(normal, 'night')} at ${gbp(rate)}`, gbp(normal * rate));
@@ -751,7 +765,11 @@
     if (el) { el.classList.add('invalid'); el.focus(); }
   };
 
-  form.addEventListener('input', e => { if (!e.target.closest('.stay')) e.target.classList.remove('invalid'); });
+  form.addEventListener('input', e => {
+    if (e.target.closest('.stay')) return;
+    e.target.classList.remove('invalid');
+    e.target.closest('.choices')?.classList.remove('invalid');
+  });
 
   form.addEventListener('submit', async e => {
     e.preventDefault();
@@ -772,6 +790,13 @@
       if (bad.closed) return fail("We're closed on Christmas Day, Boxing Day and New Year's Day. Please choose a different date.", isClosed(bad.from) ? bad.fromEl : bad.toEl);
       return fail('Please choose a drop-off date and a later collection date.', bad.from ? bad.toEl : bad.fromEl);
     }
+    if (wantsStay() && !f.returning.value) {
+      fail('Please tell us whether your cats have stayed with us before.');
+      f.returning[0].closest('.choices').classList.add('invalid');
+      f.returning[0].focus();
+      return;
+    }
+    const isNew = wantsStay() && f.returning.value === 'no';
 
     const data = {
       _subject: `${PURPOSES[purpose()]} – ${name}`,
@@ -793,10 +818,21 @@
       data['Names and ages'] = f.catDetails.value.trim() || '–';
       data['Special diet'] = f.needsDiet.checked ? (f.diet.value.trim() || 'Yes, details to follow') : 'None';
       data.Medication = f.needsMeds.checked ? (f.meds.value.trim() || 'Yes, details to follow') : 'None';
+      data.Customer = isNew ? 'New' : 'Returning';
+      const rate = nightly(cats, kennels);
+      let total = 0;
       stays.forEach((s, i) => {
         const extra = s.holidays ? `, ${s.holidays} over Christmas or New Year` : '';
-        data[`Stay ${i + 1}`] = `${niceDate(s.from)} to ${niceDate(s.to)} (${plural(s.nights, 'night')}${extra})`;
+        const cost = stayCost(s, rate);
+        total += cost;
+        data[`Stay ${i + 1}`] = `${niceDate(s.from)} to ${niceDate(s.to)} (${plural(s.nights, 'night')}${extra}) – ${gbp(cost)}`;
       });
+      data['Estimated cost'] = `${gbp(total)} at ${gbp(rate)} a night`;
+      data.Deposit = isNew ? `${gbp(cats * DEPOSIT)} (${gbp(DEPOSIT)} per cat)` : 'None, returning customer';
+
+      const reply = new URLSearchParams({ name, email, phone, cats, names: f.catDetails.value.trim(), new: isNew ? 1 : 0 });
+      stays.forEach(s => reply.append('stay', `${s.from}_${s.to}`));
+      data['Quick reply'] = `${REPLY_URL}?${reply}`;
     }
 
     const button = form.querySelector('[type=submit]');
@@ -816,7 +852,9 @@
       const via = email && phone ? ' by email or phone' : email ? ' by email' : ' by phone';
       const next = purpose() === 'visit'
         ? `We'll get back to you${via} to arrange a time to visit.`
-        : `We'll check availability and get back to you${via}. Your booking is confirmed once we reply and you've paid the deposit.`;
+        : `We'll check availability and get back to you${via}. ${isNew
+          ? "Your booking is confirmed once we reply and you've paid the deposit."
+          : 'Your booking is confirmed once we reply.'}`;
       const done = document.createElement('div');
       done.className = 'form-done';
       done.setAttribute('role', 'status');

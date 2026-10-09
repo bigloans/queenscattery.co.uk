@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Reply to enquiry · Queens Cattery</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐈</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green: #2f4a34;
+    --green-deep: #1f3324;
+    --cream: #f7f3ea;
+    --paper: #fffdf8;
+    --ink: #1f2420;
+    --muted: #5a645c;
+    --line: #e3ddcf;
+    --accent: #d9622b;
+    --radius: 14px;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--cream); color: var(--ink); font: 400 17px/1.6 Inter, system-ui, sans-serif; }
+  h1, h2 { font-family: Fraunces, Georgia, serif; font-weight: 600; line-height: 1.15; color: var(--green-deep); margin: 0 0 .5em; }
+  h1 { font-size: 1.8rem; }
+  h2 { font-size: 1.2rem; }
+  p { margin: 0 0 1em; }
+  a { color: var(--green); }
+
+  .wrap { max-width: 640px; margin: 0 auto; padding: 32px 16px 48px; }
+  .panel { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; margin-bottom: 20px; }
+
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; overflow-wrap: anywhere; }
+
+  .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px; }
+  .choice { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border: 1px solid #d3ccbb; border-radius: 10px; background: var(--cream); cursor: pointer; font-weight: 500; }
+  .choice input { width: 18px; height: 18px; margin: 0; accent-color: var(--green); flex: none; }
+  .choice:has(input:checked) { border-color: var(--green); box-shadow: inset 0 0 0 1px var(--green); background: #eef2ea; }
+
+  .field { display: block; margin-bottom: 18px; }
+  .field > span { display: block; font-weight: 500; font-size: .95rem; margin-bottom: 6px; }
+  .check { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 18px; cursor: pointer; }
+  .check input { width: 20px; height: 20px; margin: 3px 0 0; accent-color: var(--green); flex: none; }
+  input[type=text], textarea {
+    width: 100%; font: inherit; color: var(--ink);
+    padding: 11px 14px; background: var(--cream);
+    border: 1px solid #d3ccbb; border-radius: 10px;
+  }
+  textarea { resize: vertical; min-height: 220px; }
+  input:focus-visible, textarea:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; border-color: var(--green); }
+  .hint { color: var(--muted); font-size: .92rem; margin: 0 0 18px; }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .btn { display: inline-block; padding: 14px 24px; border-radius: 999px; font: inherit; font-weight: 600; text-decoration: none; cursor: pointer; border: 0; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #c4521f; }
+  .btn-outline { background: none; border: 1px solid var(--green); color: var(--green); }
+  .btn-outline:hover { background: rgba(47, 74, 52, .08); }
+
+  @media (max-width: 480px) {
+    .choices { grid-template-columns: 1fr; }
+    .actions .btn { flex: 1 1 100%; text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<main class="wrap">
+  <h1>Reply to enquiry</h1>
+
+  <section class="panel">
+    <h2>Enquiry</h2>
+    <dl id="summary"></dl>
+  </section>
+
+  <section class="panel">
+    <h2>Your reply</h2>
+    <div class="choices">
+      <label class="choice"><input type="radio" name="answer" value="yes" checked><span>We can take them</span></label>
+      <label class="choice"><input type="radio" name="answer" value="no"><span>We're full</span></label>
+    </div>
+    <label class="field">
+      <span>Cats' names</span>
+      <input type="text" id="names">
+    </label>
+    <label class="check" id="deposit-wrap">
+      <input type="checkbox" id="deposit">
+      <span id="deposit-label"></span>
+    </label>
+    <label class="field">
+      <span>Message</span>
+      <textarea id="message"></textarea>
+    </label>
+    <p class="hint">You can edit the message here, or in your email or messages app before you send it.</p>
+    <div class="actions">
+      <a class="btn btn-primary" id="send-email" hidden>Reply by email</a>
+      <a class="btn btn-primary" id="send-text" hidden>Reply by text</a>
+      <button type="button" class="btn btn-outline" id="copy">Copy message</button>
+    </div>
+  </section>
+</main>
+
+<script>
+  const DEPOSIT = 30;
+  const SIGN_OFF = 'Thanks,\nRuss & Ange';
+
+  const q = new URLSearchParams(location.search);
+  const name = q.get('name') || '';
+  const email = q.get('email') || '';
+  const phone = q.get('phone') || '';
+  const cats = +q.get('cats') || 1;
+  const isNew = q.get('new') === '1';
+  const stays = q.getAll('stay').map(s => s.split('_'));
+
+  const $ = id => document.getElementById(id);
+  const gbp = n => '£' + n.toLocaleString('en-GB');
+  const shortDate = iso => new Date(iso + 'T12:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  const list = items => items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
+
+  const firstName = name.split(/\s+/)[0];
+  const dates = list(stays.map(([from, to]) => `${shortDate(from)} to ${shortDate(to)}`));
+  const deposit = cats * DEPOSIT;
+
+  // Drop ages from entries like "Tilly, 4 and Jasper, 9"
+
+  const guessNames = text => text
+    .replace(/,?\s*\(?\d+(\.\d+)?\s*(years?|yrs?|y\/?o|months?)?(\s*old)?\)?/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/ ,/g, ',')
+    .trim();
+
+  // Summary
+
+  const rows = [
+    ['Name', name],
+    ['Email', email],
+    ['Phone', phone],
+    ['Cats', `${cats}${q.get('names') ? `, ${q.get('names')}` : ''}`],
+    ['Dates', dates],
+    ['Customer', isNew ? `New, deposit ${gbp(deposit)}` : 'Returning']
+  ];
+  rows.filter(([, v]) => v).forEach(([k, v]) => {
+    const dt = document.createElement('dt');
+    const dd = document.createElement('dd');
+    dt.textContent = k;
+    dd.textContent = v;
+    $('summary').append(dt, dd);
+  });
+
+  // Message
+
+  const answer = () => document.querySelector('[name=answer]:checked').value;
+
+  $('names').value = guessNames(q.get('names') || '');
+  $('deposit').checked = isNew;
+  $('deposit-label').textContent = `Ask for a ${gbp(deposit)} deposit (${gbp(DEPOSIT)} per cat)`;
+
+  const compose = () => {
+    const who = $('names').value.trim() || (cats === 1 ? 'your cat' : `your ${cats} cats`);
+    const hello = `Hello${firstName ? ' ' + firstName : ''}, thanks for your enquiry.`;
+    if (answer() === 'no') {
+      return `${hello} Sorry, we don't have availability for ${who} on ${dates}.\n\n${SIGN_OFF}`;
+    }
+    const booked = $('deposit').checked
+      ? `I have provisionally booked you in. As it's your first stay with us, we ask for a non-refundable deposit of ${gbp(deposit)} (${gbp(DEPOSIT)} per cat) to confirm the booking. Please let me know how you'd like to pay it, or if you wish to cancel or amend the booking.`
+      : 'I have booked you in, please let me know if you wish to cancel or amend the booking.';
+    return `${hello} We have availability for ${who} on ${dates}. ${booked}\n\n${SIGN_OFF}`;
+  };
+
+  const renderLinks = () => {
+    const body = encodeURIComponent($('message').value.replace(/\r?\n/g, '\r\n'));
+    const subject = encodeURIComponent('Your booking enquiry with Queens Cattery');
+    $('send-email').hidden = !email;
+    $('send-email').href = `mailto:${email}?subject=${subject}&body=${body}`;
+    $('send-text').hidden = !phone;
+    $('send-text').href = `sms:${phone.replace(/[^\d+]/g, '')}?&body=${body}`;
+  };
+
+  const render = () => {
+    $('deposit-wrap').hidden = answer() === 'no';
+    $('message').value = compose();
+    renderLinks();
+  };
+
+  document.querySelectorAll('[name=answer]').forEach(el => el.addEventListener('change', render));
+  $('names').addEventListener('input', render);
+  $('deposit').addEventListener('change', render);
+  $('message').addEventListener('input', renderLinks);
+  $('copy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText($('message').value);
+      $('copy').textContent = 'Copied';
+    } catch {
+      $('message').select();
+    }
+  });
+
+  render();
+</script>
+</body>
+</html>
