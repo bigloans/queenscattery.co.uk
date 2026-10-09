@@ -136,6 +136,7 @@
   .strip li { text-align: center; }
   .strip strong { display: block; font-family: Fraunces, serif; font-size: 1.6rem; color: var(--green); }
   .strip span { color: var(--muted); font-size: .92rem; }
+  .strip .stars { letter-spacing: .08em; }
   @media (max-width: 640px) {
     .strip ul { grid-template-columns: repeat(2, 1fr); }
     .strip li:last-child { grid-column: 1 / -1; }
@@ -311,7 +312,7 @@
   <ul>
     <li><strong>Since 2006</strong><span>Family-run</span></li>
     <li><strong>15</strong><span>Kennels</span></li>
-    <li><strong>5-star</strong><span>Council rating</span></li>
+    <li><strong class="stars" role="img" aria-label="5 stars">★★★★★</strong><span>Council rating</span></li>
   </ul>
 </div>
 
@@ -759,6 +760,19 @@
   renderKennels();
   addStay();
 
+  // "Tilly, 4 and Jasper, 9" + "Sam Smith" → "Tilly & Jasper Smith"
+
+  const subjectName = (owner, details) => {
+    const cats = details.replace(/\(.*?\)/g, '')
+      .split(/,|;|&|\+|\/|\band\b/i)
+      .map(s => s.replace(/\S*\d\S*|\b(years?|yrs?|months?|old)\b/gi, '').trim())
+      .filter(Boolean);
+    if (!cats.length) return owner;
+    const names = cats.length > 1 ? `${cats.slice(0, -1).join(', ')} & ${cats.at(-1)}` : cats[0];
+    const parts = owner.split(/\s+/);
+    return parts.length > 1 ? `${names} ${parts.at(-1)}` : names;
+  };
+
   const fail = (msg, el) => {
     statusEl.textContent = msg;
     statusEl.className = 'form-status error';
@@ -799,7 +813,7 @@
     const isNew = wantsStay() && f.returning.value === 'no';
 
     const data = {
-      _subject: `${PURPOSES[purpose()]} – ${name}`,
+      _subject: `${PURPOSES[purpose()]} – ${subjectName(name, wantsStay() ? f.catDetails.value : '')}`,
       _template: 'table',
       _captcha: 'false',
       Name: name,
