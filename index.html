@@ -318,9 +318,15 @@
       if (!e.isIntersecting) return;
       links.forEach(a => a.classList.remove('active'));
       const link = byId[e.target.id];
-      if (link) {
-        link.classList.add('active');
-        link.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      if (!link) return;
+      link.classList.add('active');
+
+      // Scroll only the menu sideways, never the page
+
+      const list = link.closest('ul');
+      const left = link.offsetLeft - list.offsetLeft;
+      if (left < list.scrollLeft || left + link.offsetWidth > list.scrollLeft + list.clientWidth) {
+        list.scrollTo({ left: left - 12, behavior: 'smooth' });
       }
     });
   }, { rootMargin: '-45% 0px -50% 0px' });
