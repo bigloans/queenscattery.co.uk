@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Queens Cattery · Cat boarding in West Bridgford, Nottingham</title>
-<meta name="description" content="Small, family-run cat boarding in West Bridgford, Nottingham. 14 kennels, 5-star council rating, open since 2006.">
+<meta name="description" content="Small, family-run cat boarding in West Bridgford, Nottingham. 15 kennels, 5-star council rating, open since 2006.">
 <meta property="og:title" content="Queens Cattery">
 <meta property="og:description" content="Small, family-run cat boarding in West Bridgford, Nottingham.">
 <meta property="og:image" content="https://queenscattery.co.uk/images/garden.jpg">
@@ -52,6 +52,7 @@
   }
 
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html { scroll-behavior: smooth; scroll-padding-top: 60px; }
   body {
     margin: 0;
@@ -61,6 +62,7 @@
   }
   img { max-width: 100%; height: auto; display: block; }
   a { color: var(--green); }
+  a[href^="tel:"] { white-space: nowrap; }
   h1, h2, h3 { font-family: Fraunces, Georgia, serif; font-weight: 600; line-height: 1.15; margin: 0 0 .5em; }
   h2 { font-size: clamp(1.8rem, 4vw, 2.4rem); color: var(--green-deep); }
   h3 { font-size: 1.25rem; }
@@ -206,6 +208,7 @@
   .hint { color: var(--muted); font-size: .92rem; margin: 0 0 18px; }
   .field + .hint, .form-grid + .hint { margin-top: -8px; }
   .reveal { padding-left: 30px; }
+  .food-note { background: var(--cream); border-left: 3px solid var(--green); border-radius: 0 10px 10px 0; padding: 12px 16px; font-size: .95rem; margin: 0 0 18px; }
 
   .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
   @media (max-width: 560px) { .choices { grid-template-columns: 1fr; } }
@@ -218,8 +221,16 @@
   .stay .field { margin: 0; }
   .stay-remove { width: 46px; height: 46px; border: 1px solid #d3ccbb; border-radius: 10px; background: none; color: var(--muted); font-size: 1.4rem; line-height: 1; cursor: pointer; }
   .stay-remove:hover { color: var(--ink); border-color: var(--ink); }
-  .stay-remove[hidden] { display: block; visibility: hidden; }
-  @media (max-width: 560px) { .stay { gap: 8px; } }
+  .stay:only-child { grid-template-columns: 1fr 1fr; }
+  .stay:only-child .stay-remove { display: none; }
+  .enquiry input[type=date] { -webkit-appearance: none; appearance: none; min-width: 0; min-height: 46px; display: block; }
+  .enquiry input[type=date]::-webkit-date-and-time-value { text-align: left; }
+  @media (max-width: 560px) {
+    .stay { grid-template-columns: minmax(0, 1fr) 46px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+    .stay .field:nth-child(2) { grid-row: 2; }
+    .stay-remove { grid-column: 2; grid-row: 1; }
+    .stay:only-child { grid-template-columns: minmax(0, 1fr); padding-bottom: 0; border-bottom: 0; }
+  }
   .stay-warning { color: #b3261e; font-size: .92rem; margin: 0 0 14px; }
 
   .btn-outline { background: none; border: 1px solid var(--green); color: var(--green); font: inherit; font-weight: 600; cursor: pointer; padding: 10px 20px; }
@@ -232,6 +243,10 @@
   .estimate ul { list-style: none; padding: 0; margin: 12px 0 0; }
   .estimate li { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; border-top: 1px solid var(--line); font-size: .95rem; }
   .estimate li span:first-child { color: var(--muted); }
+  .estimate li.est-stay { font-weight: 600; color: var(--ink); padding-top: 12px; }
+  .estimate li.est-stay span { color: var(--ink) !important; }
+  .estimate li.est-stay + li { border-top: 0; padding-top: 2px; }
+  .estimate li.est-double span:first-child { color: #a3441a; }
   .estimate .hint { margin: 12px 0 0; }
 
   .honey { position: absolute; left: -9999px; }
@@ -292,7 +307,7 @@
 <div class="strip">
   <ul>
     <li><strong>Since 2006</strong><span>Family-run</span></li>
-    <li><strong>14</strong><span>Kennels</span></li>
+    <li><strong>15</strong><span>Kennels</span></li>
     <li><strong>5-star</strong><span>Council rating</span></li>
   </ul>
 </div>
@@ -310,12 +325,12 @@
       <div class="split about-block" id="kennels">
         <div>
           <h3 class="subhead">Our kennels</h3>
-          <p class="lead">We have 14 kennels set in a quiet garden.</p>
+          <p class="lead">We have 15 kennels set in a quiet garden.</p>
           <ul class="ticks">
             <li>Each kennel has a raised sleeping house, shelves and a scratching post</li>
             <li>An outdoor run with views of the garden</li>
             <li>Up to 2 cats per kennel. Any kennel can be joined to the next one to make a larger pen, subject to availability</li>
-            <li>We provide meat and biscuits. Please bring any special diet or medication your cat needs</li>
+            <li>We provide Felix and Whiskas pouches and biscuits, and Iams biscuits. Please bring any special diet or medication your cat needs</li>
             <li>Licensed by Rushcliffe Borough Council</li>
           </ul>
         </div>
@@ -465,17 +480,23 @@
             <span>Names and ages <em>(optional)</em></span>
             <input type="text" name="catDetails" placeholder="e.g. Tilly, 4 and Jasper, 9">
           </label>
+          <p class="food-note">We provide Felix As Good As It Looks pouches, Whiskas pouches or biscuits, and Iams biscuits. Anything else will need to be provided by the owner.</p>
           <label class="check">
-            <input type="checkbox" name="needsDiet" id="needs-diet">
-            <span>My cat needs a special diet or medication</span>
+            <input type="checkbox" name="needsDiet" data-reveal="diet-wrap">
+            <span>My cat needs a special diet</span>
           </label>
-          <div class="reveal" id="diet-wrap" hidden>
-            <p class="hint">We provide meat and biscuits. Please bring any special food or medication with you.</p>
-            <label class="field">
-              <span>Tell us what they need</span>
-              <textarea name="diet" rows="3"></textarea>
-            </label>
-          </div>
+          <label class="field reveal" id="diet-wrap" hidden>
+            <span>What do they eat?</span>
+            <textarea name="diet" rows="2"></textarea>
+          </label>
+          <label class="check">
+            <input type="checkbox" name="needsMeds" data-reveal="meds-wrap">
+            <span>My cat needs medication</span>
+          </label>
+          <label class="field reveal" id="meds-wrap" hidden>
+            <span>What medication, and how often?</span>
+            <textarea name="meds" rows="2"></textarea>
+          </label>
           <p class="hint">More than 6 cats? Please call us on <a href="tel:07904683968">07904 683968</a>.</p>
         </fieldset>
 
@@ -585,7 +606,6 @@
   const catsEl = document.getElementById('cat-count');
   const kennelsEl = document.getElementById('kennel-count');
   const joinWrap = document.getElementById('join-wrap');
-  const dietWrap = document.getElementById('diet-wrap');
   const staysEl = document.getElementById('stays');
   const warningEl = document.getElementById('stay-warning');
   const statusEl = document.getElementById('form-status');
@@ -598,7 +618,8 @@
   const today = isoDate(new Date());
   const niceDate = iso => new Date(iso + 'T12:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   const nightsBetween = (from, to) => Math.round((Date.parse(to) - Date.parse(from)) / 86400000);
-  const isClosed = iso => CLOSED.includes(iso.slice(5));
+  const isClosed = iso => CLOSED.includes(iso.slice(-5));
+  const shortDate = iso => new Date(iso + 'T12:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 
   const purpose = () => f.purpose.value;
   const wantsStay = () => purpose() !== 'visit';
@@ -634,7 +655,7 @@
   };
 
   const renderJoin = () => {
-    joinWrap.hidden = +kennelsEl.value < 2;
+    joinWrap.hidden = +catsEl.value < 2 || +kennelsEl.value < 2;
     if (joinWrap.hidden) f.join.checked = false;
   };
 
@@ -654,16 +675,20 @@
     const toEl = row.querySelector('.stay-to');
     const from = fromEl.value, to = toEl.value;
     const nights = from && to ? nightsBetween(from, to) : 0;
-    let holidays = 0;
-    for (let n = 0; n < nights; n++) if (isClosed(addDays(from, n))) holidays++;
+    let christmas = 0, newYear = 0;
+    for (let n = 0; n < nights; n++) {
+      const day = addDays(from, n).slice(5);
+      if (day === '01-01') newYear++;
+      else if (isClosed(day)) christmas++;
+    }
+    const holidays = christmas + newYear;
     const closed = (from && isClosed(from)) || (to && isClosed(to));
-    return { fromEl, toEl, from, to, nights, holidays, closed, valid: nights > 0 && !closed };
+    return { fromEl, toEl, from, to, nights, christmas, newYear, holidays, closed, valid: nights > 0 && !closed };
   });
 
   const renderStays = () => {
     const rows = [...staysEl.children];
     rows.forEach(row => {
-      row.querySelector('.stay-remove').hidden = rows.length === 1;
       const from = row.querySelector('.stay-from').value;
       row.querySelector('.stay-to').min = addDays(from || today, 1);
     });
@@ -683,14 +708,21 @@
     const lines = document.getElementById('est-lines');
     lines.innerHTML = '';
     let total = 0;
-    stays.forEach((s, i) => {
+    const line = (label, amount, cls) => {
+      const li = document.createElement('li');
+      if (cls) li.className = cls;
+      li.innerHTML = `<span>${label}</span><span>${amount}</span>`;
+      lines.append(li);
+    };
+    stays.forEach(s => {
       if (!s.valid) return;
+      const normal = s.nights - s.holidays;
       const cost = (s.nights + s.holidays) * rate;
       total += cost;
-      const extra = s.holidays ? `, ${s.holidays} at double rate` : '';
-      const li = document.createElement('li');
-      li.innerHTML = `<span>${stays.length > 1 ? `Stay ${i + 1}, ` : ''}${plural(s.nights, 'night')} at ${gbp(rate)}${extra}</span><span>${gbp(cost)}</span>`;
-      lines.append(li);
+      line(`${shortDate(s.from)} to ${shortDate(s.to)}`, gbp(cost), 'est-stay');
+      if (normal) line(`${plural(normal, 'night')} at ${gbp(rate)}`, gbp(normal * rate));
+      if (s.christmas) line(`${plural(s.christmas, 'night')} at ${gbp(rate * 2)}, double rate over Christmas`, gbp(s.christmas * rate * 2), 'est-double');
+      if (s.newYear) line(`${plural(s.newYear, 'night')} at ${gbp(rate * 2)}, double rate on New Year's Day`, gbp(s.newYear * rate * 2), 'est-double');
     });
     document.getElementById('est-total').textContent = total ? gbp(total) : '–';
   };
@@ -698,7 +730,9 @@
   form.querySelectorAll('[name=purpose]').forEach(el => el.addEventListener('change', renderPurpose));
   catsEl.addEventListener('change', () => { renderKennels(); renderEstimate(); });
   kennelsEl.addEventListener('change', () => { renderJoin(); renderEstimate(); });
-  f.needsDiet.addEventListener('change', () => { dietWrap.hidden = !f.needsDiet.checked; });
+  form.querySelectorAll('[data-reveal]').forEach(box => box.addEventListener('change', () => {
+    document.getElementById(box.dataset.reveal).hidden = !box.checked;
+  }));
   staysEl.addEventListener('input', renderStays);
   staysEl.addEventListener('click', e => {
     if (!e.target.matches('.stay-remove')) return;
@@ -757,7 +791,8 @@
       data.Kennels = kennelLabel(cats, kennels).replace(/, £.*$/, '');
       if (kennels > 1) data['Join kennels'] = f.join.checked ? 'Yes, if available' : 'No';
       data['Names and ages'] = f.catDetails.value.trim() || '–';
-      data['Diet or medication'] = f.needsDiet.checked ? (f.diet.value.trim() || 'Yes, details to follow') : 'None';
+      data['Special diet'] = f.needsDiet.checked ? (f.diet.value.trim() || 'Yes, details to follow') : 'None';
+      data.Medication = f.needsMeds.checked ? (f.meds.value.trim() || 'Yes, details to follow') : 'None';
       stays.forEach((s, i) => {
         const extra = s.holidays ? `, ${s.holidays} over Christmas or New Year` : '';
         data[`Stay ${i + 1}`] = `${niceDate(s.from)} to ${niceDate(s.to)} (${plural(s.nights, 'night')}${extra})`;
