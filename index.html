@@ -28,7 +28,7 @@
   }
 
   * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+  html { scroll-behavior: smooth; scroll-padding-top: 60px; }
   body {
     margin: 0;
     background: var(--cream);
@@ -53,15 +53,38 @@
   }
   .nav .wrap { display: flex; align-items: center; gap: 24px; height: 60px; }
   .brand { color: #fff; text-decoration: none; font-family: Fraunces, serif; font-size: 1.25rem; font-weight: 600; white-space: nowrap; }
-  .nav ul { display: flex; gap: 4px; list-style: none; margin: 0 0 0 auto; padding: 0; overflow-x: auto; scrollbar-width: none; }
-  .nav ul::-webkit-scrollbar { display: none; }
+  .nav ul { display: flex; gap: 4px; list-style: none; margin: 0 0 0 auto; padding: 0; }
   .nav a.link { display: block; padding: 8px 12px; border-radius: 8px; color: #e7eee8; text-decoration: none; font-size: .95rem; font-weight: 500; white-space: nowrap; }
   .nav a.link:hover, .nav a.link.active { background: rgba(255, 255, 255, .12); color: #fff; }
+  .menu-btn { display: none; }
 
-  @media (max-width: 760px) {
-    html { scroll-padding-top: 112px; }
-    .nav .wrap { flex-wrap: wrap; height: auto; gap: 0; padding-top: 10px; }
-    .nav ul { margin: 0 -20px; padding: 6px 12px 8px; width: calc(100% + 40px); }
+  @media (max-width: 900px) {
+    .menu-btn {
+      display: grid; place-items: center; margin-left: auto;
+      width: 44px; height: 44px; margin-right: -8px;
+      background: none; border: 0; border-radius: 8px; color: #fff; cursor: pointer;
+    }
+    .menu-btn:hover { background: rgba(255, 255, 255, .12); }
+    .menu-btn span, .menu-btn span::before, .menu-btn span::after {
+      display: block; width: 22px; height: 2px; background: currentColor; border-radius: 2px;
+      transition: transform .2s, background .2s;
+    }
+    .menu-btn span { position: relative; }
+    .menu-btn span::before, .menu-btn span::after { content: ""; position: absolute; left: 0; }
+    .menu-btn span::before { top: -7px; }
+    .menu-btn span::after { top: 7px; }
+    .nav.open .menu-btn span { background: transparent; }
+    .nav.open .menu-btn span::before { transform: translateY(7px) rotate(45deg); }
+    .nav.open .menu-btn span::after { transform: translateY(-7px) rotate(-45deg); }
+
+    .nav ul {
+      display: none; position: absolute; top: 60px; left: 0; right: 0;
+      flex-direction: column; gap: 0; margin: 0; padding: 8px 12px 16px;
+      background: var(--green-deep); box-shadow: 0 12px 24px rgba(0, 0, 0, .25);
+    }
+    .nav.open ul { display: flex; }
+    .nav a.link { padding: 14px 12px; font-size: 1.05rem; border-bottom: 1px solid rgba(255, 255, 255, .08); border-radius: 0; }
+    .nav li:last-child a.link { border-bottom: 0; }
   }
 
   /* Hero */
@@ -142,7 +165,8 @@
 <nav class="nav" aria-label="Sections">
   <div class="wrap">
     <a class="brand" href="#top">Queens Cattery</a>
-    <ul>
+    <button class="menu-btn" type="button" aria-expanded="false" aria-controls="menu" aria-label="Menu"><span></span></button>
+    <ul id="menu">
       <li><a class="link" href="#about">About</a></li>
       <li><a class="link" href="#kennels">Kennels</a></li>
       <li><a class="link" href="#prices">Prices</a></li>
@@ -313,6 +337,19 @@
 <script>
   document.getElementById('year').textContent = new Date().getFullYear();
 
+  // Mobile menu
+
+  const nav = document.querySelector('.nav');
+  const menuBtn = nav.querySelector('.menu-btn');
+  const setMenu = open => {
+    nav.classList.toggle('open', open);
+    menuBtn.setAttribute('aria-expanded', open);
+  };
+  menuBtn.addEventListener('click', () => setMenu(!nav.classList.contains('open')));
+  nav.querySelectorAll('a').forEach(a => a.addEventListener('click', () => setMenu(false)));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
+  document.addEventListener('click', e => { if (!nav.contains(e.target)) setMenu(false); });
+
   // Highlight the nav link for the section in view
 
   const links = [...document.querySelectorAll('.nav a.link')];
@@ -322,16 +359,7 @@
       if (!e.isIntersecting) return;
       links.forEach(a => a.classList.remove('active'));
       const link = byId[e.target.id];
-      if (!link) return;
-      link.classList.add('active');
-
-      // Scroll only the menu sideways, never the page
-
-      const list = link.closest('ul');
-      const left = link.offsetLeft - list.offsetLeft;
-      if (left < list.scrollLeft || left + link.offsetWidth > list.scrollLeft + list.clientWidth) {
-        list.scrollTo({ left: left - 12, behavior: 'smooth' });
-      }
+      if (link) link.classList.add('active');
     });
   }, { rootMargin: '-45% 0px -50% 0px' });
   document.querySelectorAll('main section').forEach(s => observer.observe(s));
