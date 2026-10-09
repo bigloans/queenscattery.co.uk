@@ -35,7 +35,7 @@
     color: var(--ink);
     font: 400 17px/1.6 Inter, system-ui, sans-serif;
   }
-  img { max-width: 100%; display: block; }
+  img { max-width: 100%; height: auto; display: block; }
   a { color: var(--green); }
   h1, h2, h3 { font-family: Fraunces, Georgia, serif; font-weight: 600; line-height: 1.15; margin: 0 0 .5em; }
   h2 { font-size: clamp(1.8rem, 4vw, 2.4rem); color: var(--green-deep); }
@@ -97,7 +97,9 @@
 
   .split { display: grid; grid-template-columns: 1.2fr 1fr; gap: 48px; align-items: center; }
   .split img { border-radius: var(--radius); box-shadow: 0 10px 30px rgba(0,0,0,.12); }
-  .split .photo { max-width: 300px; justify-self: center; }
+  .split .photo { width: 100%; max-width: 400px; justify-self: center; }
+  .split .photo img { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; object-position: center 40%; }
+  .prose { max-width: 62ch; font-size: 1.1rem; }
   @media (max-width: 760px) { .split { grid-template-columns: 1fr; gap: 32px; } }
 
   .ticks { list-style: none; padding: 0; margin: 0; }
@@ -181,8 +183,10 @@
   <section id="about">
     <div class="wrap">
       <h2>About us</h2>
-      <p class="lead">We started Queens Cattery in 2006 with a single kennel in our garden, after a poor boarding experience with our own cats. We wanted somewhere we'd be happy to leave them.</p>
+      <div class="prose">
+      <p>We started Queens Cattery in 2006 with a single kennel in our garden, after a poor boarding experience with our own cats. We wanted somewhere we'd be happy to leave them.</p>
       <p>We grew to 6 kennels in 2008 and added 8 more in 2010. We're still small and family-run, and we hold a 5-star rating from Rushcliffe Borough Council. You're welcome to visit and look around before you book.</p>
+      </div>
     </div>
   </section>
 
