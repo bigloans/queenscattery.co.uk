@@ -169,7 +169,7 @@
       return `${hello} Sorry, we don't have availability for ${who} on ${dates}.\n\n${SIGN_OFF}`;
     }
     const booked = $('deposit').checked
-      ? `I have provisionally booked you in. As it's your first stay with us, we ask for a non-refundable deposit of ${gbp(deposit)} (${gbp(DEPOSIT)} per cat) to confirm the booking. Please let me know how you'd like to pay it, or if you wish to cancel or amend the booking.`
+      ? `I have provisionally booked you in. We require a non-refundable deposit of ${gbp(deposit)} (${gbp(DEPOSIT)} per cat) this time to confirm the booking. Please let me know how you'd like to pay it, or if you wish to cancel or amend the booking.`
       : 'I have booked you in, please let me know if you wish to cancel or amend the booking.';
     return `${hello} We have availability for ${who} on ${dates}. ${booked}\n\n${SIGN_OFF}`;
   };
