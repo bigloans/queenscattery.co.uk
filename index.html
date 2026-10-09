@@ -432,15 +432,14 @@
           </label>
           <div class="form-grid">
             <label class="field">
-              <span>Email</span>
+              <span>Email <em>(optional)</em></span>
               <input type="email" name="email" autocomplete="email">
             </label>
             <label class="field">
               <span>Phone</span>
-              <input type="tel" name="phone" autocomplete="tel">
+              <input type="tel" name="phone" autocomplete="tel" required>
             </label>
           </div>
-          <p class="hint">Give us an email address or phone number, or both.</p>
         </fieldset>
 
         <fieldset class="form-section">
@@ -795,7 +794,7 @@
     const phone = f.phone.value.trim();
 
     if (!name) return fail('Please tell us your name.', f.name);
-    if (!email && !phone) return fail('Please give us an email address or phone number.', f.email);
+    if (!phone) return fail('Please give us a phone number.', f.phone);
     if (email && !f.email.checkValidity()) return fail('Please check your email address.', f.email);
 
     const stays = wantsStay() ? readStays() : [];
@@ -818,7 +817,7 @@
       _captcha: 'false',
       Name: name,
       Email: email || '–',
-      Phone: phone || '–',
+      Phone: phone,
       Enquiry: PURPOSES[purpose()]
     };
     if (email) data._replyto = email;
@@ -863,7 +862,7 @@
       const json = await res.json().catch(() => ({}));
       if (!res.ok || String(json.success) !== 'true') throw new Error(json.message || res.status);
 
-      const via = email && phone ? ' by email or phone' : email ? ' by email' : ' by phone';
+      const via = email ? ' by email or phone' : ' by phone';
       const next = purpose() === 'visit'
         ? `We'll get back to you${via} to arrange a time to visit.`
         : `We'll check availability and get back to you${via}. ${isNew
