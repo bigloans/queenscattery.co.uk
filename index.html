@@ -106,11 +106,14 @@
   /* Highlights strip */
 
   .strip { background: var(--paper); border-bottom: 1px solid var(--line); }
-  .strip ul { display: grid; grid-template-columns: repeat(4, 1fr); list-style: none; margin: 0 auto; padding: 22px 20px; gap: 16px; max-width: var(--max); }
+  .strip ul { display: grid; grid-template-columns: repeat(3, 1fr); list-style: none; margin: 0 auto; padding: 22px 20px; gap: 16px; max-width: var(--max); }
   .strip li { text-align: center; }
   .strip strong { display: block; font-family: Fraunces, serif; font-size: 1.6rem; color: var(--green); }
   .strip span { color: var(--muted); font-size: .92rem; }
-  @media (max-width: 640px) { .strip ul { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 640px) {
+    .strip ul { grid-template-columns: repeat(2, 1fr); }
+    .strip li:last-child { grid-column: 1 / -1; }
+  }
 
   /* Sections */
 
@@ -135,6 +138,7 @@
   .card { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px; }
   section.alt .card { background: var(--cream); }
   .price { font-family: Fraunces, serif; font-size: 2.6rem; color: var(--green); line-height: 1; }
+  .price-enquire { font-size: 1.6rem; }
   .price small { font-family: Inter, sans-serif; font-size: .95rem; color: var(--muted); font-weight: 400; }
   .note { color: var(--muted); font-size: .95rem; margin-top: 20px; }
 
@@ -142,6 +146,8 @@
   table.hours td { padding: 12px 0; border-bottom: 1px solid var(--line); }
   table.hours td:last-child { text-align: right; font-weight: 600; }
 
+  .subhead { font-size: 1.5rem; margin-top: 48px; }
+  .subhead + .cards, .subhead + .terms { margin-top: 20px; }
   .terms { counter-reset: t; list-style: none; padding: 0; margin: 32px 0 0; display: grid; gap: 14px; }
   .terms li { counter-increment: t; position: relative; padding: 18px 20px 18px 64px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); }
   .terms li::before { content: counter(t); position: absolute; left: 20px; top: 16px; width: 30px; height: 30px; border-radius: 50%; background: var(--green); color: #fff; display: grid; place-items: center; font-weight: 600; font-size: .9rem; }
@@ -187,7 +193,7 @@
     <h1>Queens Cattery</h1>
     <p>Small, family-run cat boarding in West Bridgford, Nottingham.</p>
     <div class="actions">
-      <a class="btn btn-primary" href="tel:01159234481">Call 0115 923 4481</a>
+      <a class="btn btn-primary" href="tel:07904683968">Call 07904 683968</a>
       <a class="btn btn-ghost" href="#prices">See prices</a>
     </div>
   </div>
@@ -198,7 +204,6 @@
     <li><strong>Since 2006</strong><span>Family-run</span></li>
     <li><strong>14</strong><span>Kennels</span></li>
     <li><strong>5-star</strong><span>Council rating</span></li>
-    <li><strong>£16</strong><span>Per cat, per night</span></li>
   </ul>
 </div>
 
@@ -245,6 +250,10 @@
           <h3>2 cats sharing</h3>
           <div class="price">£25 <small>per night</small></div>
         </div>
+        <div class="card">
+          <h3>More than 2 cats</h3>
+          <div class="price price-enquire">Please enquire</div>
+        </div>
       </div>
       <p class="note">A non-refundable deposit of £30 per cat is due when you book. The rest is due on arrival.</p>
     </div>
@@ -265,8 +274,10 @@
 
   <section id="requirements">
     <div class="wrap">
-      <h2>Health requirements</h2>
-      <p class="lead">To keep every cat safe, please make sure of the following before your cat stays with us.</p>
+      <h2>Requirements and terms</h2>
+      <p class="lead">Please read these before your cat stays with us.</p>
+
+      <h3 class="subhead">Health requirements</h3>
       <div class="cards">
         <div class="card">
           <h3>Vaccinations</h3>
@@ -286,12 +297,8 @@
         </div>
       </div>
       <p class="note">We may refuse cats that aren't vaccinated or appear unwell.</p>
-    </div>
-  </section>
 
-  <section id="terms" class="alt">
-    <div class="wrap">
-      <h2>Terms and conditions</h2>
+      <h3 class="subhead" id="terms">Terms and conditions</h3>
       <ol class="terms">
         <li>Cats are boarded at the owner's risk.</li>
         <li>A £30 deposit per cat is due at booking and is non-refundable.</li>
@@ -302,7 +309,7 @@
     </div>
   </section>
 
-  <section id="contact">
+  <section id="contact" class="alt">
     <div class="wrap contact">
       <div>
         <h2>Contact us</h2>
