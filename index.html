@@ -169,9 +169,11 @@
 
   table.hours { width: 100%; border-collapse: collapse; }
   table.hours td { padding: 12px 0; border-bottom: 1px solid var(--line); }
-  table.hours td:last-child { text-align: right; font-weight: 600; }
+  table.hours td:last-child { text-align: right; font-weight: 600; white-space: nowrap; padding-left: 16px; }
 
   .subhead { font-size: 1.5rem; margin-top: 48px; }
+  .about-block { margin-top: 56px; padding-top: 56px; border-top: 1px solid var(--line); }
+  .about-block .subhead { margin-top: 0; }
   .subhead + .cards, .subhead + .terms { margin-top: 20px; }
   .terms { counter-reset: t; list-style: none; padding: 0; margin: 32px 0 0; display: grid; gap: 14px; }
   .terms li { counter-increment: t; position: relative; padding: 18px 20px 18px 64px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); }
@@ -179,13 +181,16 @@
 
   /* Booking enquiry */
 
-  .enquiry { max-width: 720px; margin-top: 32px; }
-  .enquiry fieldset { border: 0; padding: 0; margin: 0 0 36px; min-width: 0; }
-  .enquiry legend { font-family: Fraunces, serif; font-weight: 600; font-size: 1.35rem; color: var(--green-deep); margin-bottom: 14px; padding: 0; }
+  .enquiry { max-width: 720px; margin-top: 36px; }
+  .form-section { border: 0; margin: 0; padding: 32px 0; min-width: 0; border-top: 1px solid var(--line); }
+  .form-section:first-child { border-top: 0; padding-top: 0; }
+  .form-section > :last-child { margin-bottom: 0; }
+  .enquiry legend { float: left; width: 100%; padding: 0; margin-bottom: 18px; font-family: Fraunces, serif; font-weight: 600; font-size: 1.35rem; color: var(--green-deep); }
+  .enquiry legend + * { clear: both; }
   .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
   .form-grid.wide-right { grid-template-columns: 1fr 2fr; }
   @media (max-width: 560px) { .form-grid, .form-grid.wide-right { grid-template-columns: 1fr; } }
-  .field { display: block; margin-bottom: 16px; }
+  .field { display: block; margin-bottom: 18px; }
   .field > span { display: block; font-weight: 500; font-size: .95rem; margin-bottom: 6px; }
   .field em { font-style: normal; color: var(--muted); font-weight: 400; }
   .enquiry input, .enquiry select, .enquiry textarea {
@@ -194,39 +199,50 @@
     border: 1px solid #d3ccbb; border-radius: 10px;
   }
   .enquiry textarea { resize: vertical; }
-  .enquiry input:focus, .enquiry select:focus, .enquiry textarea:focus { outline: 2px solid var(--green); outline-offset: 1px; border-color: var(--green); }
+  .enquiry input:focus-visible, .enquiry select:focus-visible, .enquiry textarea:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; border-color: var(--green); }
   .enquiry .invalid { border-color: #b3261e; }
-  .check { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 16px; cursor: pointer; }
+  .check { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 18px; cursor: pointer; }
   .enquiry .check input { width: 20px; height: 20px; margin: 3px 0 0; accent-color: var(--green); flex: none; }
-  .hint { color: var(--muted); font-size: .92rem; margin: -6px 0 16px; }
+  .hint { color: var(--muted); font-size: .92rem; margin: 0 0 18px; }
+  .field + .hint, .form-grid + .hint { margin-top: -8px; }
+  .reveal { padding-left: 30px; }
 
-  .stay { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end; margin-bottom: 14px; }
+  .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  @media (max-width: 560px) { .choices { grid-template-columns: 1fr; } }
+  .choice { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border: 1px solid #d3ccbb; border-radius: 10px; background: var(--cream); cursor: pointer; font-weight: 500; }
+  .enquiry .choice input { width: 18px; height: 18px; margin: 0; accent-color: var(--green); flex: none; }
+  .choice:has(input:checked) { border-color: var(--green); box-shadow: inset 0 0 0 1px var(--green); background: #eef2ea; }
+  .choice:has(input:focus-visible) { outline: 2px solid var(--green); outline-offset: 2px; }
+
+  .stay { display: grid; grid-template-columns: 1fr 1fr 46px; gap: 12px; align-items: end; margin-bottom: 14px; }
   .stay .field { margin: 0; }
   .stay-remove { width: 46px; height: 46px; border: 1px solid #d3ccbb; border-radius: 10px; background: none; color: var(--muted); font-size: 1.4rem; line-height: 1; cursor: pointer; }
   .stay-remove:hover { color: var(--ink); border-color: var(--ink); }
   .stay-remove[hidden] { display: block; visibility: hidden; }
-  @media (max-width: 560px) { .stay { grid-template-columns: 1fr 1fr 46px; gap: 8px; } }
+  @media (max-width: 560px) { .stay { gap: 8px; } }
+  .stay-warning { color: #b3261e; font-size: .92rem; margin: 0 0 14px; }
 
   .btn-outline { background: none; border: 1px solid var(--green); color: var(--green); font: inherit; font-weight: 600; cursor: pointer; padding: 10px 20px; }
   .btn-outline:hover { background: rgba(47, 74, 52, .08); }
 
-  .estimate { background: var(--cream); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 24px 8px; margin: 0 0 36px; }
+  .estimate { background: var(--cream); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 24px; margin-top: 24px; }
   .estimate-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
   .estimate-head span { font-weight: 600; }
   .estimate-head strong { font-family: Fraunces, serif; font-size: 2rem; color: var(--green); line-height: 1; }
-  .estimate ul { list-style: none; padding: 0; margin: 12px 0 16px; }
+  .estimate ul { list-style: none; padding: 0; margin: 12px 0 0; }
   .estimate li { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; border-top: 1px solid var(--line); font-size: .95rem; }
   .estimate li span:first-child { color: var(--muted); }
-  .estimate .hint { margin: 0 0 14px; }
+  .estimate .hint { margin: 12px 0 0; }
 
   .honey { position: absolute; left: -9999px; }
-  .form-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+  .form-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding-bottom: 0; }
   .form-foot .btn { border: 0; font: inherit; font-weight: 600; cursor: pointer; padding: 14px 28px; }
   .form-foot .btn:disabled { opacity: .6; cursor: default; }
   .form-status { margin: 0; font-size: .95rem; }
   .form-status.error { color: #b3261e; }
   .form-done { background: var(--cream); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px; max-width: 720px; margin-top: 32px; }
   .form-done h3 { color: var(--green-deep); }
+  .form-done p:last-child { margin: 0; }
 
   /* Contact */
 
@@ -250,10 +266,8 @@
     <button class="menu-btn" type="button" aria-expanded="false" aria-controls="menu" aria-label="Menu"><span></span></button>
     <ul id="menu">
       <li><a class="link" href="#about">About</a></li>
-      <li><a class="link" href="#kennels">Kennels</a></li>
       <li><a class="link" href="#prices">Prices</a></li>
-      <li><a class="link" href="#hours">Opening hours</a></li>
-      <li><a class="link" href="#requirements">Requirements &amp; terms</a></li>
+      <li><a class="link" href="#terms">Terms</a></li>
       <li><a class="link" href="#book">Book</a></li>
       <li><a class="link" href="#contact">Contact</a></li>
     </ul>
@@ -292,30 +306,40 @@
       <p>We started Queens Cattery in 2006 with a single kennel in our garden, after a poor boarding experience with our own cats. We wanted somewhere we'd be happy to leave them.</p>
       <p>We grew to 6 kennels in 2008 and added 8 more in 2010. We're still small and family-run, and we hold a 5-star rating from Rushcliffe Borough Council. You're welcome to look around before you book. Visits are by appointment.</p>
       </div>
-    </div>
-  </section>
 
-  <section id="kennels" class="alt">
-    <div class="wrap split">
-      <div>
-        <h2>Our kennels</h2>
-        <p class="lead">We have 14 kennels set in a quiet garden.</p>
-        <ul class="ticks">
-          <li>Each kennel has a raised sleeping house, shelves and a scratching post</li>
-          <li>An outdoor run with views of the garden</li>
-          <li>Up to 2 cats per kennel. Any kennel can be joined to the next one to make a larger pen, subject to availability</li>
-          <li>We provide meat and biscuits. Please bring any special diet or medication your cat needs</li>
-          <li>Licensed by Rushcliffe Borough Council</li>
-        </ul>
+      <div class="split about-block" id="kennels">
+        <div>
+          <h3 class="subhead">Our kennels</h3>
+          <p class="lead">We have 14 kennels set in a quiet garden.</p>
+          <ul class="ticks">
+            <li>Each kennel has a raised sleeping house, shelves and a scratching post</li>
+            <li>An outdoor run with views of the garden</li>
+            <li>Up to 2 cats per kennel. Any kennel can be joined to the next one to make a larger pen, subject to availability</li>
+            <li>We provide meat and biscuits. Please bring any special diet or medication your cat needs</li>
+            <li>Licensed by Rushcliffe Borough Council</li>
+          </ul>
+        </div>
+        <picture class="photo">
+          <source srcset="images/kennel.avif" type="image/avif">
+          <img src="images/kennel.jpg" alt="Inside a kennel with a raised sleeping house, ramp, shelf and scratching post" width="620" height="904" loading="lazy">
+        </picture>
       </div>
-      <picture class="photo">
-        <source srcset="images/kennel.avif" type="image/avif">
-        <img src="images/kennel.jpg" alt="Inside a kennel with a raised sleeping house, ramp, shelf and scratching post" width="620" height="904" loading="lazy">
-      </picture>
+
+      <div class="split about-block" id="hours">
+        <div>
+          <h3 class="subhead">Opening hours</h3>
+          <p class="lead">Drop-off and collection times. Visits are by appointment.</p>
+        </div>
+        <table class="hours">
+          <tr><td>Monday to Saturday</td><td>9am – 5pm</td></tr>
+          <tr><td>Sunday and bank holidays</td><td>9am – 12pm</td></tr>
+          <tr><td>Christmas Day, Boxing Day and New Year's Day</td><td>Closed</td></tr>
+        </table>
+      </div>
     </div>
   </section>
 
-  <section id="prices">
+  <section id="prices" class="alt">
     <div class="wrap">
       <h2>Prices</h2>
       <div class="cards">
@@ -332,26 +356,13 @@
           <div class="price"><a href="#book">Enquire</a> <small>for a quote</small></div>
         </div>
       </div>
-      <p class="note">Prices are per kennel, with up to 2 cats in each. For example, 3 cats in 2 kennels is £41 a night. A non-refundable deposit of £30 per cat is due when you book, and the rest is due on arrival.</p>
+      <p class="note">Prices are per kennel, with up to 2 cats in each. For example, 3 cats in 2 kennels is £41 a night. Nights over Christmas Day, Boxing Day and New Year's Day are charged at double rate. A non-refundable deposit of £30 per cat is due when you book, and the rest is due on arrival.</p>
     </div>
   </section>
 
-  <section id="hours" class="alt">
-    <div class="wrap split">
-      <div>
-        <h2>Opening hours</h2>
-        <p class="lead">Drop-off and collection times. Visits are by appointment.</p>
-      </div>
-      <table class="hours">
-        <tr><td>Monday to Saturday</td><td>9am – 5pm</td></tr>
-        <tr><td>Sunday and bank holidays</td><td>9am – 12pm</td></tr>
-      </table>
-    </div>
-  </section>
-
-  <section id="requirements">
+  <section id="terms">
     <div class="wrap">
-      <h2>Requirements and terms</h2>
+      <h2>Terms and conditions</h2>
       <p class="lead">Please read these before your cat stays with us.</p>
 
       <h3 class="subhead">Health requirements</h3>
@@ -375,11 +386,12 @@
       </div>
       <p class="note">We may refuse cats that aren't vaccinated or appear unwell.</p>
 
-      <h3 class="subhead" id="terms">Terms and conditions</h3>
+      <h3 class="subhead">Booking terms</h3>
       <ol class="terms">
         <li>Cats are boarded at the owner's risk.</li>
         <li>A £30 deposit per cat is due at booking and is non-refundable.</li>
         <li>Boarding fees are due on arrival.</li>
+        <li>Nights over Christmas Day, Boxing Day and New Year's Day are charged at double rate. We're closed for drop-off and collection on these days.</li>
         <li>You can cancel free of charge up to 14 days before drop-off. Later cancellations pay the full booking fee.</li>
         <li>Cats not collected within 14 days of the agreed collection date will be rehomed or placed elsewhere at the owner's expense.</li>
       </ol>
@@ -389,61 +401,11 @@
   <section id="book" class="alt">
     <div class="wrap">
       <h2>Booking enquiry</h2>
-      <p class="lead">Tell us when you need us and we'll check availability. This sends us an enquiry. Your booking is confirmed once we reply and you've paid the deposit.</p>
+      <p class="lead">Book a stay, arrange a visit or both. We'll check availability and get back to you. A booking is confirmed once we reply and you've paid the deposit.</p>
 
       <form id="enquiry" class="enquiry" novalidate>
 
-        <fieldset>
-          <legend>Your cats</legend>
-          <div class="form-grid wide-right">
-            <label class="field">
-              <span>Number of cats</span>
-              <select name="cats" id="cat-count">
-                <option>1</option><option>2</option><option>3</option>
-                <option>4</option><option>5</option><option>6</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Kennels</span>
-              <select name="kennels" id="kennel-count"></select>
-            </label>
-          </div>
-          <label class="check" id="join-wrap" hidden>
-            <input type="checkbox" name="join" id="join">
-            <span>Join the kennels into one larger pen, if available</span>
-          </label>
-          <label class="field">
-            <span>Names and ages <em>(optional)</em></span>
-            <input type="text" name="catDetails" placeholder="e.g. Tilly, 4 and Jasper, 9">
-          </label>
-          <p class="hint">More than 6 cats? Please call us on <a href="tel:07904683968">07904 683968</a>.</p>
-        </fieldset>
-
-        <fieldset>
-          <legend>Dates</legend>
-          <div id="stays"></div>
-          <button type="button" class="btn btn-outline" id="add-stay">Add another stay</button>
-        </fieldset>
-
-        <div class="estimate" aria-live="polite">
-          <div class="estimate-head">
-            <span>Estimated cost</span>
-            <strong id="est-total">–</strong>
-          </div>
-          <ul id="est-lines"></ul>
-          <p class="hint">An estimate only. We'll confirm the price when we reply.</p>
-        </div>
-
-        <fieldset>
-          <legend>Food and medication</legend>
-          <p class="hint">We provide meat and biscuits. If your cat needs a special diet or medication, please bring it with you.</p>
-          <label class="field">
-            <span>Special diet or medication <em>(optional)</em></span>
-            <textarea name="diet" rows="3"></textarea>
-          </label>
-        </fieldset>
-
-        <fieldset>
+        <fieldset class="form-section">
           <legend>Your details</legend>
           <label class="field">
             <span>Name</span>
@@ -460,19 +422,83 @@
             </label>
           </div>
           <p class="hint">Give us an email address or phone number, or both.</p>
-          <label class="check">
-            <input type="checkbox" name="visit">
-            <span>I'd like to book a visit first</span>
+        </fieldset>
+
+        <fieldset class="form-section">
+          <legend>What would you like to do?</legend>
+          <div class="choices">
+            <label class="choice"><input type="radio" name="purpose" value="stay" checked><span>Book a stay</span></label>
+            <label class="choice"><input type="radio" name="purpose" value="visit"><span>Arrange a visit</span></label>
+            <label class="choice"><input type="radio" name="purpose" value="both"><span>Visit and book</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset class="form-section" data-for="visit" hidden>
+          <legend>Your visit</legend>
+          <label class="field">
+            <span>Days or times that suit you <em>(optional)</em></span>
+            <input type="text" name="visitTimes" placeholder="e.g. Saturday mornings">
+          </label>
+          <p class="hint">Visits are by appointment. We'll get back to you to arrange a time.</p>
+        </fieldset>
+
+        <fieldset class="form-section" data-for="stay">
+          <legend>Your cats</legend>
+          <div class="form-grid wide-right">
+            <label class="field">
+              <span>Number of cats</span>
+              <select name="cats" id="cat-count">
+                <option>1</option><option>2</option><option>3</option>
+                <option>4</option><option>5</option><option>6</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Kennels</span>
+              <select name="kennels" id="kennel-count"></select>
+            </label>
+          </div>
+          <label class="check" id="join-wrap" hidden>
+            <input type="checkbox" name="join">
+            <span>Join the kennels into one larger pen, if available</span>
           </label>
           <label class="field">
-            <span>Anything else <em>(optional)</em></span>
-            <textarea name="message" rows="3"></textarea>
+            <span>Names and ages <em>(optional)</em></span>
+            <input type="text" name="catDetails" placeholder="e.g. Tilly, 4 and Jasper, 9">
           </label>
+          <label class="check">
+            <input type="checkbox" name="needsDiet" id="needs-diet">
+            <span>My cat needs a special diet or medication</span>
+          </label>
+          <div class="reveal" id="diet-wrap" hidden>
+            <p class="hint">We provide meat and biscuits. Please bring any special food or medication with you.</p>
+            <label class="field">
+              <span>Tell us what they need</span>
+              <textarea name="diet" rows="3"></textarea>
+            </label>
+          </div>
+          <p class="hint">More than 6 cats? Please call us on <a href="tel:07904683968">07904 683968</a>.</p>
+        </fieldset>
+
+        <fieldset class="form-section" data-for="stay">
+          <legend>Dates</legend>
+          <p class="hint">We're closed for drop-off and collection on Christmas Day, Boxing Day and New Year's Day. Nights over these days are charged at double rate.</p>
+          <div id="stays"></div>
+          <p class="stay-warning" id="stay-warning" role="alert" hidden></p>
+          <button type="button" class="btn btn-outline" id="add-stay">Add another stay</button>
+
+          <div class="estimate" aria-live="polite">
+            <div class="estimate-head">
+              <span>Estimated cost</span>
+              <strong id="est-total">–</strong>
+            </div>
+            <ul id="est-lines"></ul>
+            <p class="hint">An estimate only. We'll confirm the price when we reply.</p>
+          </div>
         </fieldset>
 
         <input type="text" name="_honey" class="honey" tabindex="-1" autocomplete="off" aria-hidden="true">
 
-        <div class="form-foot">
+        <div class="form-section form-foot">
           <button type="submit" class="btn btn-primary">Send enquiry</button>
           <p class="form-status" id="form-status" role="status"></p>
         </div>
@@ -548,20 +574,35 @@
   const SINGLE = 16;
   const SHARED = 25;
 
+  // Closed for drop-off and collection, and nights over these days cost double
+
+  const CLOSED = ['12-25', '12-26', '01-01'];
+
+  const PURPOSES = { stay: 'Book a stay', visit: 'Arrange a visit', both: 'Visit and book' };
+
   const form = document.getElementById('enquiry');
+  const f = form.elements;
   const catsEl = document.getElementById('cat-count');
   const kennelsEl = document.getElementById('kennel-count');
   const joinWrap = document.getElementById('join-wrap');
+  const dietWrap = document.getElementById('diet-wrap');
   const staysEl = document.getElementById('stays');
+  const warningEl = document.getElementById('stay-warning');
   const statusEl = document.getElementById('form-status');
-  const f = form.elements;
 
   const gbp = n => '£' + n.toLocaleString('en-GB');
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
   const pad = n => String(n).padStart(2, '0');
   const isoDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const addDays = (iso, n) => new Date(Date.parse(iso) + n * 86400000).toISOString().slice(0, 10);
   const today = isoDate(new Date());
   const niceDate = iso => new Date(iso + 'T12:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   const nightsBetween = (from, to) => Math.round((Date.parse(to) - Date.parse(from)) / 86400000);
+  const isClosed = iso => CLOSED.includes(iso.slice(5));
+
+  const purpose = () => f.purpose.value;
+  const wantsStay = () => purpose() !== 'visit';
+  const wantsVisit = () => purpose() !== 'stay';
 
   // A kennel holds 1 or 2 cats, so k kennels for n cats means n - k shared and 2k - n single
 
@@ -573,7 +614,13 @@
     if (shared) parts.push(cats === 2 ? 'sharing' : `${shared} shared`);
     if (single && cats > 1) parts.push(cats === k ? 'one each' : `${single} single`);
     const detail = parts.length ? ` (${parts.join(', ')})` : '';
-    return `${k} kennel${k > 1 ? 's' : ''}${detail}, ${gbp(nightly(cats, k))} a night`;
+    return `${plural(k, 'kennel')}${detail}, ${gbp(nightly(cats, k))} a night`;
+  };
+
+  const renderPurpose = () => {
+    form.querySelectorAll('[data-for]').forEach(el => {
+      el.hidden = el.dataset.for === 'stay' ? !wantsStay() : !wantsVisit();
+    });
   };
 
   const renderKennels = () => {
@@ -596,49 +643,62 @@
     row.className = 'stay';
     row.innerHTML = `
       <label class="field"><span>Drop-off</span><input type="date" class="stay-from" min="${today}" required></label>
-      <label class="field"><span>Collection</span><input type="date" class="stay-to" min="${today}" required></label>
+      <label class="field"><span>Collection</span><input type="date" class="stay-to" min="${addDays(today, 1)}" required></label>
       <button type="button" class="stay-remove" aria-label="Remove this stay">×</button>`;
     staysEl.append(row);
     renderStays();
   };
 
+  const readStays = () => [...staysEl.children].map(row => {
+    const fromEl = row.querySelector('.stay-from');
+    const toEl = row.querySelector('.stay-to');
+    const from = fromEl.value, to = toEl.value;
+    const nights = from && to ? nightsBetween(from, to) : 0;
+    let holidays = 0;
+    for (let n = 0; n < nights; n++) if (isClosed(addDays(from, n))) holidays++;
+    const closed = (from && isClosed(from)) || (to && isClosed(to));
+    return { fromEl, toEl, from, to, nights, holidays, closed, valid: nights > 0 && !closed };
+  });
+
   const renderStays = () => {
     const rows = [...staysEl.children];
     rows.forEach(row => {
       row.querySelector('.stay-remove').hidden = rows.length === 1;
-      const from = row.querySelector('.stay-from');
-      const to = row.querySelector('.stay-to');
-      to.min = from.value || today;
+      const from = row.querySelector('.stay-from').value;
+      row.querySelector('.stay-to').min = addDays(from || today, 1);
     });
-    renderEstimate();
+
+    const stays = readStays();
+    stays.forEach(s => {
+      s.fromEl.classList.toggle('invalid', !!s.from && isClosed(s.from));
+      s.toEl.classList.toggle('invalid', !!s.to && isClosed(s.to));
+    });
+    warningEl.hidden = !stays.some(s => s.closed);
+    warningEl.textContent = "We're closed on Christmas Day, Boxing Day and New Year's Day. Please choose a different drop-off or collection date.";
+    renderEstimate(stays);
   };
 
-  const readStays = () => [...staysEl.children].map(row => {
-    const from = row.querySelector('.stay-from').value;
-    const to = row.querySelector('.stay-to').value;
-    const nights = from && to ? nightsBetween(from, to) : 0;
-    return { from, to, nights, valid: nights > 0 };
-  });
-
-  const renderEstimate = () => {
+  const renderEstimate = (stays = readStays()) => {
     const rate = nightly(+catsEl.value, +kennelsEl.value);
-    const stays = readStays();
     const lines = document.getElementById('est-lines');
     lines.innerHTML = '';
     let total = 0;
     stays.forEach((s, i) => {
       if (!s.valid) return;
-      const cost = s.nights * rate;
+      const cost = (s.nights + s.holidays) * rate;
       total += cost;
+      const extra = s.holidays ? `, ${s.holidays} at double rate` : '';
       const li = document.createElement('li');
-      li.innerHTML = `<span>${stays.length > 1 ? `Stay ${i + 1}, ` : ''}${s.nights} night${s.nights > 1 ? 's' : ''} at ${gbp(rate)}</span><span>${gbp(cost)}</span>`;
+      li.innerHTML = `<span>${stays.length > 1 ? `Stay ${i + 1}, ` : ''}${plural(s.nights, 'night')} at ${gbp(rate)}${extra}</span><span>${gbp(cost)}</span>`;
       lines.append(li);
     });
     document.getElementById('est-total').textContent = total ? gbp(total) : '–';
   };
 
+  form.querySelectorAll('[name=purpose]').forEach(el => el.addEventListener('change', renderPurpose));
   catsEl.addEventListener('change', () => { renderKennels(); renderEstimate(); });
   kennelsEl.addEventListener('change', () => { renderJoin(); renderEstimate(); });
+  f.needsDiet.addEventListener('change', () => { dietWrap.hidden = !f.needsDiet.checked; });
   staysEl.addEventListener('input', renderStays);
   staysEl.addEventListener('click', e => {
     if (!e.target.matches('.stay-remove')) return;
@@ -647,6 +707,7 @@
   });
   document.getElementById('add-stay').addEventListener('click', addStay);
 
+  renderPurpose();
   renderKennels();
   addStay();
 
@@ -656,49 +717,52 @@
     if (el) { el.classList.add('invalid'); el.focus(); }
   };
 
-  form.addEventListener('input', e => e.target.classList.remove('invalid'));
+  form.addEventListener('input', e => { if (!e.target.closest('.stay')) e.target.classList.remove('invalid'); });
 
   form.addEventListener('submit', async e => {
     e.preventDefault();
-    form.querySelectorAll('.invalid').forEach(el => el.classList.remove('invalid'));
+    form.querySelectorAll('.invalid').forEach(el => { if (!el.closest('.stay')) el.classList.remove('invalid'); });
     if (f._honey.value) return;
 
     const name = f.name.value.trim();
     const email = f.email.value.trim();
     const phone = f.phone.value.trim();
-    const stays = readStays();
 
-    const badStay = stays.findIndex(s => !s.valid);
-    if (badStay > -1) {
-      const row = staysEl.children[badStay];
-      const el = stays[badStay].from ? row.querySelector('.stay-to') : row.querySelector('.stay-from');
-      return fail('Please choose a drop-off date and a later collection date.', el);
-    }
     if (!name) return fail('Please tell us your name.', f.name);
     if (!email && !phone) return fail('Please give us an email address or phone number.', f.email);
     if (email && !f.email.checkValidity()) return fail('Please check your email address.', f.email);
 
-    const cats = +catsEl.value;
-    const kennels = +kennelsEl.value;
+    const stays = wantsStay() ? readStays() : [];
+    const bad = stays.find(s => !s.valid);
+    if (bad) {
+      if (bad.closed) return fail("We're closed on Christmas Day, Boxing Day and New Year's Day. Please choose a different date.", isClosed(bad.from) ? bad.fromEl : bad.toEl);
+      return fail('Please choose a drop-off date and a later collection date.', bad.from ? bad.toEl : bad.fromEl);
+    }
+
     const data = {
-      _subject: `Booking enquiry from ${name}`,
+      _subject: `${PURPOSES[purpose()]} – ${name}`,
       _template: 'table',
       _captcha: 'false',
       Name: name,
       Email: email || '–',
       Phone: phone || '–',
-      Cats: cats,
-      Kennels: kennelLabel(cats, kennels).replace(/, £.*$/, ''),
-      'Join kennels': f.join.checked ? 'Yes, if available' : 'No',
-      'Names and ages': f.catDetails.value.trim() || '–',
-      'Diet or medication': f.diet.value.trim() || '–',
-      'Visit first': f.visit.checked ? 'Yes' : 'No',
-      Message: f.message.value.trim() || '–'
+      Enquiry: PURPOSES[purpose()]
     };
     if (email) data._replyto = email;
-    stays.forEach((s, i) => {
-      data[`Stay ${i + 1}`] = `${niceDate(s.from)} to ${niceDate(s.to)} (${s.nights} night${s.nights > 1 ? 's' : ''})`;
-    });
+    if (wantsVisit()) data['Visit times'] = f.visitTimes.value.trim() || 'Any';
+    if (wantsStay()) {
+      const cats = +catsEl.value;
+      const kennels = +kennelsEl.value;
+      data.Cats = cats;
+      data.Kennels = kennelLabel(cats, kennels).replace(/, £.*$/, '');
+      if (kennels > 1) data['Join kennels'] = f.join.checked ? 'Yes, if available' : 'No';
+      data['Names and ages'] = f.catDetails.value.trim() || '–';
+      data['Diet or medication'] = f.needsDiet.checked ? (f.diet.value.trim() || 'Yes, details to follow') : 'None';
+      stays.forEach((s, i) => {
+        const extra = s.holidays ? `, ${s.holidays} over Christmas or New Year` : '';
+        data[`Stay ${i + 1}`] = `${niceDate(s.from)} to ${niceDate(s.to)} (${plural(s.nights, 'night')}${extra})`;
+      });
+    }
 
     const button = form.querySelector('[type=submit]');
     button.disabled = true;
@@ -714,17 +778,21 @@
       const json = await res.json().catch(() => ({}));
       if (!res.ok || String(json.success) !== 'true') throw new Error(json.message || res.status);
 
+      const via = email && phone ? ' by email or phone' : email ? ' by email' : ' by phone';
+      const next = purpose() === 'visit'
+        ? `We'll get back to you${via} to arrange a time to visit.`
+        : `We'll check availability and get back to you${via}. Your booking is confirmed once we reply and you've paid the deposit.`;
       const done = document.createElement('div');
       done.className = 'form-done';
       done.setAttribute('role', 'status');
       done.innerHTML = `<h3>Thanks, we've got your enquiry</h3>
-        <p>We'll check availability and get back to you${email ? ' by email' : ''}${email && phone ? ' or phone' : phone ? ' by phone' : ''} soon. Your booking is confirmed once we reply and you've paid the deposit.</p>
-        <p class="hint" style="margin:0">If it's urgent, call or text us on <a href="tel:07904683968">07904 683968</a>.</p>`;
+        <p>${next}</p>
+        <p class="hint">If it's urgent, call or text us on <a href="tel:07904683968">07904 683968</a>.</p>`;
       form.replaceWith(done);
       done.scrollIntoView({ block: 'center' });
     } catch {
       button.disabled = false;
-      fail('Sorry, that didn\'t send. Please call or text us on 07904 683968, or email russ_e@hotmail.co.uk.');
+      fail("Sorry, that didn't send. Please call or text us on 07904 683968, or email russ_e@hotmail.co.uk.");
     }
   });
 </script>
