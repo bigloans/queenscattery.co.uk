@@ -53,3 +53,13 @@ alter table public.bookings
   add column depart_time text not null default '',
   add column deposit_paid boolean not null default false,
   add column bill_paid boolean not null default false;
+
+-- Completed tasks and custom bills, added later. Safe to run more than once.
+
+alter table public.bookings
+  add column if not exists arrive_time text not null default '',
+  add column if not exists depart_time text not null default '',
+  add column if not exists deposit_paid boolean not null default false,
+  add column if not exists bill_paid boolean not null default false,
+  add column if not exists done jsonb not null default '[]'::jsonb,
+  add column if not exists bill numeric;

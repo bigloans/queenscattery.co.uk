@@ -49,19 +49,22 @@ export async function signOut() {
   if (!demo) await (await db()).auth.signOut();
 }
 
-// Columns added after launch. Until the SQL for them has run, saves leave them out.
+// Columns added after launch. Until the SQL for one has run, saves leave it out.
 
-const LATER = ['arrive_time', 'depart_time', 'deposit_paid', 'bill_paid'];
-export let hasLaterColumns = true;
+const LATER = { arrive_time: '', depart_time: '', deposit_paid: false, bill_paid: false, done: [], bill: null };
+const missing = new Set();
+export const hasColumn = name => !missing.has(name);
+export const missingColumns = () => [...missing];
 
 export async function load() {
-  if (demo) return local.read();
+  if (demo) return local.read().map(b => ({ ...LATER, ...b }));
   const client = await db();
-  const probe = await client.from('bookings').select(LATER.join(',')).limit(1);
-  hasLaterColumns = !probe.error;
+  const probes = await Promise.all(Object.keys(LATER).map(c => client.from('bookings').select(c).limit(1).then(r => [c, r.error])));
+  missing.clear();
+  for (const [c, error] of probes) if (error) missing.add(c);
   const { data, error } = await client.from('bookings').select('*').order('arrive');
   if (error) throw error;
-  return data.map(b => ({ arrive_time: '', depart_time: '', deposit_paid: false, bill_paid: false, ...b }));
+  return data.map(b => ({ ...LATER, ...b }));
 }
 
 export async function save(rows) {
@@ -77,7 +80,7 @@ export async function save(rows) {
     local.write(all);
     return;
   }
-  if (!hasLaterColumns) rows = rows.map(r => Object.fromEntries(Object.entries(r).filter(([k]) => !LATER.includes(k))));
+  if (missing.size) rows = rows.map(r => Object.fromEntries(Object.entries(r).filter(([k]) => !missing.has(k))));
   const { error } = await (await db()).from('bookings').upsert(rows);
   if (error) throw error;
 }
@@ -128,6 +131,8 @@ export const blank = fields => ({
   depart_time: '',
   deposit_paid: false,
   bill_paid: false,
+  done: [],
+  bill: null,
   diet: '',
   meds: '',
   notes: '',

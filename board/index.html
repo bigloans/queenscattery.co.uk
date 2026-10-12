@@ -114,6 +114,20 @@
   .ticket .leg { display: grid; gap: 2px; padding-top: 4px; }
   .ticket .leg + .leg { border-top: 1px dashed var(--line); margin-top: 2px; }
   .ticket .dir { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .ticket { cursor: pointer; position: relative; }
+  .ticket header { padding-right: 30px; }
+  .ticket .done { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--paper); color: var(--green); font-weight: 700; cursor: pointer; display: grid; place-items: center; padding: 0; }
+  .ticket .done:hover, .ticket .done:focus-visible { background: var(--green); color: #fff; border-color: var(--green); }
+  .ticket.late { background: #fbece4; }
+  .ticket p { margin: 0; }
+  .ticket .owed { font-size: .85rem; }
+  .paybox:empty { display: none; }
+  .paybox { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .paybox dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; font-size: .92rem; }
+  .paybox dt { color: var(--muted); }
+  .paybox dd { margin: 0; }
+  .paybox small { color: var(--muted); margin-left: 4px; }
+  .card .due { font-weight: 600; color: var(--green-deep); }
   .pay { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 2px; }
   .pay label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
   .pay input { width: 16px; height: 16px; margin: 0; accent-color: var(--green); }
@@ -273,6 +287,7 @@
   </header>
   <form id="booking-form" novalidate>
     <div class="where" id="where"></div>
+    <div class="paybox" id="paybox"></div>
     <div class="section-label">Owner</div>
     <label class="field"><span>Name</span><input name="name" required></label>
     <div class="row2">
@@ -310,6 +325,7 @@
     <div class="section-label">Payments</div>
     <label class="check"><input type="checkbox" name="deposit_paid"><span>Deposit paid</span></label>
     <label class="check"><input type="checkbox" name="bill_paid"><span>Bill paid</span></label>
+    <label class="field"><span>Custom bill (£), if not the standard price</span><input name="bill" type="number" min="0" step="0.01" inputmode="decimal"></label>
   </form>
   <footer>
     <button class="btn danger" id="delete" type="button">Delete</button>
