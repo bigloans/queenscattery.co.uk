@@ -124,14 +124,23 @@
   const shortDate = iso => new Date(iso + 'T12:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
   const list = items => items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
 
-  const firstName = name.split(/\s+/)[0];
+  // First name only, so "Mrs Jane Smith" becomes "Jane" and "Mrs Smith" gives no name
+
+  const TITLES = /^(mr|mrs|ms|miss|mx|dr|prof|sir|lady|lord|rev)\.?$/i;
+  const nameParts = name.trim().split(/\s+/).filter(Boolean);
+  const firstName = nameParts.length && TITLES.test(nameParts[0])
+    ? (nameParts.length > 2 ? nameParts[1] : '')
+    : (nameParts[0] || '');
   const dates = list(stays.map(([from, to]) => `${shortDate(from)} to ${shortDate(to)}`));
   const deposit = cats * DEPOSIT;
 
-  // Drop ages from entries like "Tilly, 4 and Jasper, 9"
+  // Drop ages from entries like "Tilly, 4 and Jasper, 9" or "Apollo 4 years old (born Dec 2021)"
 
   const guessNames = text => text
-    .replace(/,?\s*\(?\d+(\.\d+)?\s*(years?|yrs?|y\/?o|months?)?(\s*old)?\)?/gi, ' ')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/,?\s*\b(born|aged?)\b[^,]*?(\d{4}|\d+(\.\d+)?\s*(years?|yrs?|y\/?o|months?)?(\s*old)?)/gi, ' ')
+    .replace(/,?\s*\d+(\.\d+)?\s*(years?|yrs?|y\/?o|months?)?(\s*old)?/gi, ' ')
+    .replace(/\b(both|each)\b\s*$/i, ' ')
     .replace(/\s+/g, ' ')
     .replace(/ ,/g, ',')
     .trim();
