@@ -12,9 +12,12 @@
 // The planner only ever chooses kennels. It never changes a booking's dates, times, cats or
 // number of kennels.
 //
-// Holding pens 16 to 23 are a last resort. When the planner places a cat itself, a stay in
-// one lasts at most two nights, either for a whole short stay or while the cat is out of its
-// kennel mid-stay. Closures block
+// Holding pens 16 to 23 are a last resort, for as few nights as possible. A whole stay only
+// goes in one when it's two nights or less. A cat moving out of its kennel mid-stay uses
+// main kennels on every night one is free, and holding pens for the rest.
+//
+// A booking that still doesn't fit can go in a kennel where a single cat has already
+// arrived. That cat moves out while it's there and comes back afterwards. Closures block
 // every kennel and holding pen, from the first closed night up to the day we reopen.
 
 export const KENNELS = 15;
@@ -181,7 +184,8 @@ function prepare(bookings, T) {
     const units = unitSlots(b);
     it.units = validUnits(it, units) ? units : null;
     it.orig = keyOf(it.units);
-    it.fixed = !!it.units && (!!b.locked || dayNum(b.arrive) <= T / 2);
+    it.locked = !!b.locked;
+    it.fixed = !!it.units && (it.locked || dayNum(b.arrive) <= T / 2);
     return it;
   });
 }
@@ -311,7 +315,7 @@ function unitOptions(g, a, d, ks, allowMove, cats) {
     x -= x % 2;
     y += y % 2;
     if (x <= a || y >= d) continue;
-    const mid = route(x, y, ks.concat(holds), (lane, s, e) => g.free(lane, s, e));
+    const mid = route(x, y, ks.concat(holds), (lane, s, e) => g.free(lane, s, e), Infinity);
     if (mid) out.push(mergeSegs([{ k, a, d: x }, ...mid, { k, a: y, d }]));
   }
   return out;
@@ -454,6 +458,90 @@ function improve(g, items, T, wChanged, ms) {
   }
 }
 
+// Making room: put unit ui of `it` in kennel k by routing the single cats already there round
+// it. Returns the change, applied to the grid, or null with the grid unchanged.
+
+const fillUnit = (g, u, v) => u.forEach(s => g.set(s.k, s.a, s.d, v));
+const clip = (u, lo, hi) => u.map(s => ({ k: s.k, a: Math.max(s.a, lo), d: Math.min(s.d, hi) })).filter(s => s.a < s.d);
+
+function roomIn(g, items, it, k) {
+  const x = it.a - (it.a % 2);
+  const y = it.d + (it.d % 2);
+  const found = new Set();
+  for (let t = it.a; t < it.d; t++) {
+    const v = g.at(k, t);
+    if (v === CLOSED) return null;
+    if (v) found.add(items[v - 1]);
+  }
+  const moves = [];
+  for (const r of found) {
+    if (!r.fixed || r.locked) return null;
+    r.units.forEach((u, ui) => {
+      if (u.some(s => s.k === k && s.a < it.d && it.a < s.d)) moves.push({ r, ui, old: u });
+    });
+  }
+  if (moves.some(m => catsIn(m.r, m.ui) !== 1 || !(m.old[0].a < x && y < m.old.at(-1).d))) return null;
+
+  moves.forEach(m => fillUnit(g, m.old, 0));
+  const undo = () => {
+    moves.forEach(m => m.nu && fillUnit(g, m.nu, 0));
+    g.set(k, it.a, it.d, 0);
+    moves.forEach(m => fillUnit(g, m.old, m.r.v));
+    return null;
+  };
+  if (!g.free(k, it.a, it.d)) return undo();
+  g.set(k, it.a, it.d, it.v);
+  let score = 0;
+  for (const m of moves) {
+    const mid = route(x, y, ALL.concat(HOLDING), (lane, a, d) => g.free(lane, a, d), Infinity);
+    if (!mid) return undo();
+    m.nu = mergeSegs([...clip(m.old, -Infinity, x), ...mid, ...clip(m.old, y, Infinity)]);
+    if (m.nu[0].k !== m.nu.at(-1).k) return undo();
+    fillUnit(g, m.nu, m.r.v);
+    score += mid.reduce((n, s) => n + (isHolding(s.k) ? (s.d - s.a) * ROUTE_HOLD : 0), 0) + m.nu.length;
+  }
+  return { k, moves, score, undo };
+}
+
+function makeRoom(g, items, it) {
+  const done = [];
+  const units = [];
+  for (let ui = 0; ui < it.kennels; ui++) {
+    const ks = it.kennels === 1 ? singleKennels(it) : ALL;
+    const free = ks.find(k => g.free(k, it.a, it.d));
+    if (free) {
+      g.set(free, it.a, it.d, it.v);
+      done.push({ undo: () => g.set(free, it.a, it.d, 0) });
+      units.push([{ k: free, a: it.a, d: it.d }]);
+      continue;
+    }
+    let best = null;
+    for (const k of ks) {
+      const trial = roomIn(g, items, it, k);
+      if (!trial) continue;
+      trial.undo();
+      if (!best || trial.score < best.score) best = trial;
+    }
+    const room = best && roomIn(g, items, it, best.k);
+    if (!room) {
+      done.reverse().forEach(d => d.undo());
+      return false;
+    }
+    done.push(room);
+    units.push([{ k: room.k, a: it.a, d: it.d }]);
+  }
+  it.units = units;
+  it.key = keyOf(units);
+  it.miss = unjoined(it, g.T);
+  for (const room of done) {
+    for (const m of room.moves ?? []) {
+      m.r.units = m.r.units.map((u, i) => (i === m.ui ? m.nu : u));
+      m.r.key = keyOf(m.r.units);
+    }
+  }
+  return true;
+}
+
 // Main entry point
 //
 // mode 'insert' places bookings with no kennel, moving others only if it has to.
@@ -505,6 +593,7 @@ export function plan(bookings, { today = todayIso(), mode = 'insert', ms, closur
   if (mode === 'optimise' || items.some(it => !it.units)) {
     improve(g, items, T, wChanged, ms ?? (mode === 'optimise' ? 1500 : 500));
   }
+  for (const it of items.filter(it => !it.units)) makeRoom(g, items, it);
 
   const placements = {};
   for (const it of items) placements[it.id] = toIso(it.units);

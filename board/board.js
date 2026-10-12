@@ -284,6 +284,10 @@ function cardHtml(b, piece, key) {
 }
 
 function render() {
+  if (holdingPref === null && usesHolding() !== showHolding) {
+    measure();
+    buildStatic();
+  }
   const days = end - start;
   const lanes = $('lanes');
   lanes.style.width = `${lanesWidth()}px`;
@@ -551,7 +555,8 @@ function renderNotices() {
   const waiting = bookings.filter(b => !placementOf(b) && b.depart > TODAY).sort((x, y) => x.arrive.localeCompare(y.arrive));
   if (waiting.length) {
     out.push(`<div class="notice waiting"><span>${plural(waiting.length, 'booking')} with no kennel yet:</span>
-      ${waiting.map(b => `<button class="chip" data-open="${b.id}">${esc(b.name || 'No name')}, ${esc(niceDate(b.arrive))}</button>`).join('')}</div>`);
+      ${waiting.map(b => `<button class="chip" data-open="${b.id}">${esc(b.name || 'No name')}, ${esc(niceDate(b.arrive))}</button>`).join('')}
+      ${preview ? '' : '<button class="btn primary" data-act="find-room">Find kennels</button>'}</div>`);
   }
   const held = bookings.filter(b => b.depart > TODAY && holdNights(placementOf(b)).length).sort((x, y) => x.arrive.localeCompare(y.arrive));
   if (held.length) {
@@ -574,12 +579,27 @@ $('notices').addEventListener('click', e => {
     preview = null;
     render();
   } else if (act === 'apply-preview') applyPreview();
+  else if (act === 'find-room') findRoom();
   else if (act === 'next-change') {
     const ids = [...preview.changed].map(byId).sort((x, y) => x.arrive.localeCompare(y.arrive));
     const b = ids[preview.idx++ % ids.length];
     focusBooking(b.id, false);
   }
 });
+
+// Place bookings with no kennel, moving others only where that's the only way to fit them
+
+function findRoom() {
+  const res = plan(bookings, planOpts());
+  if (!res.changed.length) return toast('There\u2019s still no room for them, even with holding pens.');
+  const rows = res.changed.map(id => ({ ...byId(id), placement: res.placements[id] }));
+  const lines = rows.map(b => `${b.name || 'A booking'}: ${lc(describe(b, b.placement))}`);
+  const still = res.unplaced.filter(id => byId(id).depart > TODAY).length;
+  const held = rows.some(b => holdNights(b.placement).length);
+  const msg = `${held ? 'This uses a holding pen.\n\n' : ''}${lines.join('\n')}${still ? `\n\n${plural(still, 'booking')} still won\u2019t fit.` : ''}\n\nGo ahead?`;
+  if (!confirm(msg)) return;
+  commit(rows, `Found kennels. ${plural(rows.length, 'booking')} updated.`);
+}
 
 // Scrolling and navigation
 
@@ -1145,7 +1165,7 @@ $('save').addEventListener('click', async () => {
   // Keep the kennel unless the stay changed shape, or new times clash with a neighbour
 
   const old = byId(openId);
-  const reshaped = !old || ['arrive', 'depart', 'cats', 'kennels', 'joined'].some(f => String(old[f]) !== String(fields[f]));
+  const reshaped = !old || !old.placement || ['arrive', 'depart', 'cats', 'kennels', 'joined'].some(f => String(old[f]) !== String(fields[f]));
   const updated = old ? { ...old, ...fields } : null;
   if (old && !reshaped && (!old.placement || !blockers(bookings.filter(o => o.id !== old.id), updated, old.placement).length)) {
     closePanel();
