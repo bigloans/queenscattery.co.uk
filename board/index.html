@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Kennel board · Queens Cattery</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐈</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green: #2f4a34;
+    --green-deep: #1f3324;
+    --cream: #f7f3ea;
+    --paper: #fffdf8;
+    --ink: #1f2420;
+    --muted: #5a645c;
+    --line: #e3ddcf;
+    --line-soft: #efeadf;
+    --accent: #d9622b;
+    --danger: #b3261e;
+    --weekend: #f1ece0;
+    --past: rgba(90, 100, 92, .06);
+    --radius: 12px;
+    --shadow: 0 8px 30px rgba(31, 36, 32, .18);
+
+    --row: 28px;
+    --date-w: 128px;
+    --head-h: 44px;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--cream); color: var(--ink); font: 400 15px/1.45 Inter, system-ui, sans-serif; overflow: hidden; }
+  h1, h2 { font-family: Fraunces, Georgia, serif; font-weight: 600; line-height: 1.15; color: var(--green-deep); margin: 0; }
+  h1 { font-size: 1.25rem; }
+  h2 { font-size: 1.15rem; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); font-weight: 600; font-size: .9rem; cursor: pointer; white-space: nowrap; }
+  .btn:hover { border-color: var(--green); }
+  .btn.primary { background: var(--green); border-color: var(--green); color: #fff; }
+  .btn.primary:hover { background: var(--green-deep); }
+  .btn.accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.danger { color: var(--danger); }
+  .btn.icon { width: 36px; padding: 0; }
+  .btn:focus-visible, .card:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
+
+  /* Sign in */
+
+  .login { display: grid; place-items: center; height: 100%; padding: 16px; }
+  .login form { width: min(360px, 100%); background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px; display: grid; gap: 14px; }
+  .login .error { color: var(--danger); margin: 0; font-size: .9rem; }
+
+  /* Fields */
+
+  .field { display: grid; gap: 4px; }
+  .field > span { font-weight: 500; font-size: .85rem; color: var(--muted); }
+  .field input, .field select, .field textarea { width: 100%; padding: 8px 10px; background: var(--cream); border: 1px solid #d3ccbb; border-radius: 8px; }
+  .field textarea { resize: vertical; min-height: 60px; }
+  .check { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; font-size: .92rem; }
+  .check input { width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--green); flex: none; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* App shell */
+
+  .app { display: grid; grid-template-rows: auto auto 1fr; height: 100%; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 16px; background: var(--paper); border-bottom: 1px solid var(--line); }
+  .bar h1 { margin-right: auto; }
+  .bar-nav { display: flex; align-items: center; gap: 6px; }
+  .bar-nav select { height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); font-weight: 600; }
+  .bar-actions { display: flex; gap: 8px; }
+  .search { position: relative; }
+  .search input { height: 36px; width: 220px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--cream); }
+  .results { position: absolute; top: 42px; right: 0; width: 300px; max-height: 60vh; overflow: auto; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); z-index: 30; padding: 4px; }
+  .results button { display: block; width: 100%; text-align: left; padding: 8px 10px; border: 0; background: none; border-radius: 8px; cursor: pointer; }
+  .results button:hover, .results button:focus-visible { background: var(--cream); }
+  .results small { display: block; color: var(--muted); }
+  .results p { margin: 8px 10px; color: var(--muted); }
+
+  .notices:empty { display: none; }
+  .notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 16px; border-bottom: 1px solid var(--line); font-size: .9rem; }
+  .notice.demo { background: #fff4d6; }
+  .notice.waiting { background: #fbe9e0; }
+  .notice.preview { background: #e7efe4; }
+  .notice .grow { flex: 1 1 260px; }
+  .chip { border: 1px solid var(--line); background: var(--paper); border-radius: 999px; padding: 3px 10px; cursor: pointer; font-size: .85rem; }
+  .chip:hover { border-color: var(--accent); }
+
+  /* Timeline */
+
+  .scroller { overflow: auto; position: relative; overscroll-behavior: contain; }
+  .sheet { position: relative; }
+  .head { position: sticky; top: 0; z-index: 20; display: flex; height: var(--head-h); background: var(--paper); border-bottom: 1px solid var(--line); }
+  .corner { position: sticky; left: 0; z-index: 2; flex: none; width: var(--date-w); background: var(--paper); border-right: 1px solid var(--line); display: flex; align-items: center; padding: 0 10px; font-size: .75rem; color: var(--muted); }
+  .heads { position: relative; flex: none; }
+  .kh { position: absolute; top: 0; height: 100%; display: grid; place-items: center; font-weight: 600; font-size: .95rem; color: var(--green-deep); }
+  .kh small { display: block; font-weight: 500; font-size: .68rem; color: var(--muted); margin-top: -4px; }
+  .pairline { position: absolute; bottom: 5px; height: 3px; border-radius: 2px; background: var(--line); }
+
+  .body { display: flex; }
+  .dates { position: sticky; left: 0; z-index: 10; flex: none; width: var(--date-w); background: var(--paper); border-right: 1px solid var(--line); }
+  .date { height: var(--row); display: flex; align-items: center; gap: 6px; padding: 0 10px; font-size: .8rem; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+  .date.weekend { background: var(--weekend); }
+  .date.month { border-top: 2px solid var(--green); }
+  .date.today { background: var(--accent); color: #fff; font-weight: 600; }
+  .date.past { color: var(--muted); }
+  .date .free { margin-left: auto; font-size: .72rem; color: var(--muted); }
+  .date .free.full { color: var(--accent); font-weight: 600; }
+  .date.today .free { color: #fff; }
+
+  .lanes { position: relative; flex: none; }
+  .lane { position: absolute; top: 0; bottom: 0; background-image: linear-gradient(to bottom, transparent calc(var(--row) - 1px), var(--line-soft) 0); background-size: 100% var(--row); border-left: 1px solid var(--line-soft); border-right: 1px solid var(--line-soft); }
+  .band { position: absolute; left: 0; right: 0; height: var(--row); pointer-events: none; }
+  .band.weekend { background: var(--weekend); }
+  .band.past { background: var(--past); }
+  .band.month { height: 0; border-top: 2px solid var(--green); opacity: .5; }
+  .band.today { height: 0; border-top: 2px solid var(--accent); z-index: 6; }
+
+  .lane.hold { background-color: rgba(217, 98, 43, .05); background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgba(217, 98, 43, .07) 6px 8px); }
+  .kh.hold { font-size: .8rem; color: var(--accent); }
+  .closure { position: absolute; left: 0; right: 0; z-index: 3; pointer-events: none; background: repeating-linear-gradient(135deg, rgba(47, 74, 52, .16) 0 10px, rgba(47, 74, 52, .08) 10px 20px); border-top: 2px solid var(--green); border-bottom: 2px solid var(--green); }
+  .closure span { position: sticky; top: calc(var(--head-h) + 8px); display: inline-block; margin: 8px 0 0 12px; padding: 2px 10px; border-radius: 999px; background: var(--green); color: #fff; font-size: .78rem; font-weight: 600; }
+  .date.closed { background: #e4e9e0; color: var(--green-deep); }
+  .card.held { background: repeating-linear-gradient(135deg, var(--c) 0 6px, #fbe3d6 6px 10px); border-color: var(--accent); }
+  .card { position: absolute; z-index: 4; padding: 3px 6px; border-radius: 7px; border: 1px solid rgba(0, 0, 0, .14); background: var(--c, #dfe8d8); overflow: hidden; cursor: grab; font-size: .76rem; line-height: 1.25; user-select: none; -webkit-user-select: none; touch-action: auto; }
+  .card b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: rgba(31, 36, 32, .75); }
+  .card.away { border-style: dashed; border-width: 2px; }
+  .card.clash { box-shadow: 0 0 0 2px var(--danger); }
+  .card.changed { box-shadow: 0 0 0 2px var(--accent); }
+  .card.flash { animation: flash 1.2s ease 2; }
+  .card.dim { opacity: .35; }
+  .card.ghost { z-index: 15; opacity: .95; box-shadow: var(--shadow); pointer-events: none; cursor: grabbing; transition: left .06s; }
+  .card.ghost.bad { box-shadow: 0 0 0 2px var(--danger), var(--shadow); }
+  .card.ghost.swap { box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+  .card.locked { padding-right: 14px; }
+  .card.locked::after { content: ''; position: absolute; top: 5px; right: 4px; width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+  @keyframes flash { 50% { box-shadow: 0 0 0 3px var(--accent); } }
+
+  /* Booking panel */
+
+  .panel { position: fixed; z-index: 40; top: 0; right: 0; bottom: 0; width: min(420px, 100%); background: var(--paper); border-left: 1px solid var(--line); box-shadow: var(--shadow); display: flex; flex-direction: column; }
+  .panel header { display: flex; align-items: center; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .panel header h2 { margin-right: auto; }
+  .panel form { flex: 1; overflow: auto; padding: 16px; display: grid; gap: 12px; align-content: start; }
+  .panel footer { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); }
+  .panel footer .btn.danger { margin-right: auto; }
+  .where { background: var(--cream); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; }
+  .where p { margin: 0; }
+  .where .warn { color: var(--accent); font-weight: 500; }
+  .contact { margin: 0; }
+  .contact a { color: var(--green); }
+  .muted { color: var(--muted); font-size: .88rem; margin: 0; }
+  .closure-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .closure-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--cream); border-radius: 10px; padding: 8px 10px; font-size: .9rem; }
+  .closure-list small { color: var(--muted); }
+  #closure-add { justify-self: start; }
+  .section-label { font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-top: 4px; }
+
+  .toast { position: fixed; z-index: 50; left: 50%; bottom: 20px; transform: translateX(-50%); max-width: calc(100% - 32px); background: var(--ink); color: #fff; border-radius: 12px; padding: 10px 14px; display: flex; gap: 12px; align-items: center; box-shadow: var(--shadow); font-size: .9rem; }
+  .toast button { background: none; border: 0; color: #ffc9ad; font-weight: 600; cursor: pointer; padding: 0; }
+
+  @media (max-width: 700px) {
+    :root { --row: 26px; --date-w: 62px; --head-h: 40px; }
+    .bar { padding: 8px 12px; gap: 8px; }
+    .bar-nav { order: 3; flex: 1 1 100%; }
+    .bar-nav select { flex: 1; min-width: 0; }
+    .search { order: 4; flex: 1 1 100%; }
+    .search input { width: 100%; }
+    .results { left: 0; right: 0; width: auto; }
+    .btn .wide { display: none; }
+    .bar-actions { flex-wrap: wrap; }
+    .date { padding: 0 6px; font-size: .72rem; }
+    .date .free { display: none; }
+    .card { font-size: .68rem; padding: 2px 4px; }
+    .card span { display: none; }
+    .panel { top: auto; height: 88%; border-left: 0; border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="login" id="login" hidden>
+  <form id="login-form">
+    <h1>Kennel board</h1>
+    <label class="field"><span>Email</span><input type="email" name="email" autocomplete="username" required></label>
+    <label class="field"><span>Password</span><input type="password" name="password" autocomplete="current-password" required></label>
+    <p class="error" id="login-error" hidden></p>
+    <button class="btn primary" type="submit">Sign in</button>
+  </form>
+</div>
+
+<div class="app" id="app" hidden>
+  <header class="bar">
+    <h1>Kennel board</h1>
+    <nav class="bar-nav" aria-label="Dates">
+      <button class="btn icon" id="prev" aria-label="Previous month">‹</button>
+      <select id="month" aria-label="Jump to month"></select>
+      <button class="btn icon" id="next" aria-label="Next month">›</button>
+      <button class="btn" id="today">Today</button>
+    </nav>
+    <div class="search">
+      <input type="search" id="search" placeholder="Find a booking" aria-label="Find a booking" autocomplete="off">
+      <div class="results" id="results" hidden></div>
+    </div>
+    <div class="bar-actions">
+      <button class="btn primary" id="add">+ <span class="wide">Add booking</span></button>
+      <button class="btn" id="optimise">Optimise</button>
+      <button class="btn" id="closures">Closures</button>
+      <button class="btn" id="holding" aria-pressed="false">Holding pens</button>
+      <button class="btn" id="signout">Sign out</button>
+    </div>
+  </header>
+  <div class="notices" id="notices"></div>
+  <div class="scroller" id="scroller">
+    <div class="sheet" id="sheet">
+      <div class="head"><div class="corner">Night of</div><div class="heads" id="heads"></div></div>
+      <div class="body"><div class="dates" id="dates"></div><div class="lanes" id="lanes"></div></div>
+    </div>
+  </div>
+</div>
+
+<aside class="panel" id="panel" hidden aria-labelledby="panel-title">
+  <header>
+    <h2 id="panel-title">Booking</h2>
+    <button class="btn icon" id="panel-close" aria-label="Close">✕</button>
+  </header>
+  <form id="booking-form" novalidate>
+    <div class="where" id="where"></div>
+    <div class="section-label">Owner</div>
+    <label class="field"><span>Name</span><input name="name" required></label>
+    <div class="row2">
+      <label class="field"><span>Phone</span><input name="phone" type="tel"></label>
+      <label class="field"><span>Email</span><input name="email" type="email"></label>
+    </div>
+    <p class="contact" id="contact"></p>
+    <div class="section-label">Stay</div>
+    <div class="row2">
+      <label class="field"><span>Arrives</span><input name="arrive" type="date" required></label>
+      <label class="field"><span>Leaves</span><input name="depart" type="date" required></label>
+    </div>
+    <div class="row2">
+      <label class="field"><span>Cats</span><select name="cats"></select></label>
+      <label class="field"><span>Kennels</span><select name="kennels"></select></label>
+    </div>
+    <label class="check" id="joined-wrap"><input type="checkbox" name="joined"><span>Join kennels into one pen when we can</span></label>
+    <label class="field"><span>Cats' names</span><input name="cat_names"></label>
+    <label class="field"><span>Special diet</span><textarea name="diet" rows="2"></textarea></label>
+    <label class="field"><span>Medication</span><textarea name="meds" rows="2"></textarea></label>
+    <label class="field"><span>Notes</span><textarea name="notes" rows="2"></textarea></label>
+    <label class="check"><input type="checkbox" name="new_customer"><span>New customer</span></label>
+  </form>
+  <footer>
+    <button class="btn danger" id="delete" type="button">Delete</button>
+    <button class="btn" id="cancel" type="button">Cancel</button>
+    <button class="btn primary" id="save" type="button">Save</button>
+  </footer>
+</aside>
+
+<aside class="panel" id="closures-panel" hidden aria-labelledby="closures-title">
+  <header>
+    <h2 id="closures-title">Closures</h2>
+    <button class="btn icon" id="closures-close" aria-label="Close">✕</button>
+  </header>
+  <form id="closure-form" novalidate>
+    <p class="muted">No cats stay from the first closed night until the day you reopen. Cats can be dropped off on the day you reopen.</p>
+    <div class="row2">
+      <label class="field"><span>First night closed</span><input name="closed_from" type="date" required></label>
+      <label class="field"><span>Open again</span><input name="reopens" type="date" required></label>
+    </div>
+    <label class="field"><span>Note</span><input name="note" placeholder="e.g. Annual leave"></label>
+    <button class="btn primary" id="closure-add" type="button">Add closure</button>
+    <div class="section-label">Coming up</div>
+    <ul class="closure-list" id="closure-list"></ul>
+  </form>
+</aside>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script type="module" src="board.js"></script>
+</body>
+</html>
