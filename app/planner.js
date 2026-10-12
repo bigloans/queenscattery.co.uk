@@ -26,7 +26,10 @@ export const todayIso = () => {
 // that need its extra space.
 
 const COST = { unplaced: 1e6, move: 1000, unjoined: 15, apart: 2, big: 3, gap: 3, halfPair: 0.2 };
-const CHANGED = { insert: 40, optimise: 3 };
+// Moving a booking that already has a kennel. When adding bookings this costs more than any
+// preference but less than a mid-stay move, so others only move to make room.
+
+const CHANGED = { insert: 500, optimise: 3 };
 const gapCost = g => COST.gap * g * Math.max(0, 1 - g / 21);
 
 const ALL = Array.from({ length: KENNELS }, (_, i) => i + 1);
@@ -133,7 +136,7 @@ function totalCost(g, items, T, wChanged) {
   let c = 0;
   for (const it of items) {
     if (!it.units) {
-      c += COST.unplaced;
+      c += COST.unplaced + (it.orig ? wChanged : 0);
       continue;
     }
     c += bookingCost(it, T);

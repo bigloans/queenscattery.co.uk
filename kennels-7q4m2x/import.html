@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Import bookings · Queens Cattery</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐈</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --green: #2f4a34; --green-deep: #1f3324; --cream: #f7f3ea; --paper: #fffdf8; --ink: #1f2420; --muted: #5a645c; --line: #e3ddcf; --accent: #d9622b; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--cream); color: var(--ink); font: 400 16px/1.55 Inter, system-ui, sans-serif; }
+  h1 { font: 600 1.6rem/1.2 Fraunces, Georgia, serif; color: var(--green-deep); margin: 0 0 .6em; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 32px 16px 48px; }
+  .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 24px; display: grid; gap: 14px; }
+  p { margin: 0; }
+  .muted { color: var(--muted); font-size: .92rem; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; height: 42px; padding: 0 20px; border-radius: 999px; border: 0; background: var(--green); color: #fff; font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; justify-self: start; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  a { color: var(--green); }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <h1>Import bookings</h1>
+  <div class="panel">
+    <p id="status">Checking you're signed in…</p>
+    <label id="pick" hidden>
+      <span class="muted">Choose the import file</span><br>
+      <input type="file" id="file" accept=".json,application/json">
+    </label>
+    <button class="btn" id="go" hidden>Import</button>
+    <p class="muted"><a href="./">Back to the board</a></p>
+  </div>
+</main>
+
+<script type="module">
+  import * as store from '../app/store.js';
+
+  const $ = id => document.getElementById(id);
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  let rows = [];
+  let all = [];
+
+  if (store.demo || !(await store.signedIn())) {
+    $('status').textContent = 'Sign in on the board first, then come back to this page.';
+  } else {
+    all = await store.load();
+    $('status').textContent = `Signed in. The board has ${plural(all.length, 'booking')} now.`;
+    $('pick').hidden = false;
+  }
+
+  $('file').addEventListener('change', async e => {
+    try {
+      const list = JSON.parse(await e.target.files[0].text());
+      const known = new Set(all.map(b => b.source).filter(Boolean));
+      rows = list.filter(b => !known.has(b.source));
+      const skip = list.length - rows.length;
+      const unplaced = rows.filter(b => !b.placement).length;
+      $('status').textContent = `${plural(rows.length, 'booking')} to import`
+        + (skip ? `, ${skip} already on the board` : '')
+        + (unplaced ? `. ${plural(unplaced, 'booking')} without a kennel will be placed automatically.` : '.');
+      $('go').hidden = !rows.length;
+    } catch {
+      $('status').textContent = "That file isn't an import file.";
+    }
+  });
+
+  $('go').addEventListener('click', async () => {
+    $('go').disabled = true;
+    $('status').textContent = 'Importing…';
+    try {
+      const { moved, unplaced } = await store.addAndPlace(rows, all);
+      $('status').textContent = `Imported ${plural(rows.length, 'booking')}.`
+        + (moved.length ? ` ${plural(moved.length, 'booking')} already on the board moved to make room.` : '')
+        + (unplaced.length ? ` ${plural(unplaced.length, 'booking')} couldn't be given a kennel and ${unplaced.length === 1 ? 'is' : 'are'} listed above the board.` : '');
+      $('go').hidden = true;
+      all = await store.load();
+    } catch (err) {
+      $('status').textContent = `Import failed: ${err.message}`;
+      $('go').disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
