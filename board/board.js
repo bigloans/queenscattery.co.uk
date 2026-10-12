@@ -1,6 +1,6 @@
 import {
   KENNELS, LANES, HOLDING, PAIRS, isHolding, mateOf, dayNum, isoDay, todayIso, plan, blockers,
-  unitSlots, arriveSlot, departSlot
+  unitSlots, arriveSlot, departSlot, route, mergeSegs
 } from '../app/planner.js';
 import * as store from '../app/store.js';
 import { owed, billTotal, standardBill, depositAmount, isCustomBill, gbp } from '../app/pricing.js';
@@ -139,7 +139,8 @@ function describe(b, p = placementOf(b)) {
   if (isPair(p)) return `Kennels ${Math.min(p[0][0].k, p[1][0].k)} and ${Math.max(p[0][0].k, p[1][0].k)}, joined`;
   const parts = p.map(u => {
     if (u.length === 1) return kname(u[0].k);
-    return `${kname(u[0].k)}, moving to ${kname(u[1].k)} on ${niceDate(u[1].from)} and back on ${niceDate(u[1].to)}`;
+    const hops = u.slice(1, -1).map(s => `${kname(s.k)} from ${niceDate(s.from)}`).join(', then ');
+    return `${kname(u[0].k)}, moving to ${hops}, and back on ${niceDate(u.at(-1).from)}`;
   });
   return cap(parts.join('; '));
 }
@@ -223,7 +224,7 @@ function piecesOf(b, p, turns) {
       out.push({ ks: [u[0].k], segs: [u[0]], u, part: pairLike ? 'pair' : 'whole', unit });
       return;
     }
-    u.forEach((s, i) => out.push({ ks: [s.k], segs: [s], u, i, part: i === 1 ? 'away' : 'home', unit, home: u[0].k, away: u[1].k, back: u[1].to }));
+    u.forEach((s, i) => out.push({ ks: [s.k], segs: [s], u, i, part: s.k === u[0].k ? 'home' : 'away', unit, home: u[0].k, next: u[i + 1] }));
   });
   for (const piece of out) {
     const s = piece.segs[0];
@@ -267,12 +268,12 @@ function cardHtml(b, piece, key) {
   const s = piece.segs[0];
   const lines = [];
   if (piece.part === 'away') {
-    lines.push(`<b>↪ ${esc(name)}</b>`, `<span>Back to ${kshort(piece.home)} ${esc(shortDate(dayNum(piece.back)))}</span>`);
+    lines.push(`<b>↪ ${esc(name)}</b>`, `<span>${piece.next.k === piece.home ? 'Back to' : 'Then'} ${kshort(piece.next.k)} ${esc(shortDate(dayNum(piece.next.from)))}</span>`);
   } else {
     lines.push(`<b>${esc(name)}</b>`);
     if (s === piece.u[0] && b.arrive_time) lines.push(`<span>In ${esc(timeText(b.arrive_time))}</span>`);
     if (s === piece.u.at(-1) && b.depart_time) lines.push(`<span>Out ${esc(timeText(b.depart_time))}</span>`);
-    if (s !== piece.u.at(-1)) lines.push(`<span>To ${kshort(piece.away)} ${esc(shortDate(dayNum(s.to)))}</span>`);
+    if (s !== piece.u.at(-1)) lines.push(`<span>To ${kshort(piece.next.k)} ${esc(shortDate(dayNum(s.to)))}</span>`);
     if (piece.unit === 0 && s === piece.u[0]) lines.push(`<span class="due">${b.bill_paid ? 'Paid' : `${gbp(owed(b))} due`}</span>`);
     lines.push(`<span>${esc(cats)}</span>`);
   }
@@ -735,10 +736,14 @@ function selfOverlap(b, p) {
 }
 
 function collapse(u) {
-  return u.every(s => s.k === u[0].k) ? [{ k: u[0].k, from: u[0].from, to: u.at(-1).to }] : u;
+  const out = [];
+  for (const s of u) {
+    if (out.length && out.at(-1).k === s.k) out.at(-1).to = s.to;
+    else out.push({ ...s });
+  }
+  return out;
 }
 
-const nights = s => dayNum(s.to) - dayNum(s.from);
 
 // The placement a booking would have if this piece went to kennel k
 
@@ -747,7 +752,7 @@ function proposal(b, piece, k) {
   if (isHolding(k)) {
     if (piece.part === 'pair' || piece.part === 'home') return null;
     if (piece.part === 'whole' && (dayNum(b.depart) - dayNum(b.arrive) > HOLD_MAX || unitCats(b, piece.unit) > 2)) return null;
-    if (piece.part === 'away' && nights(p[piece.unit][1]) > HOLD_MAX) return null;
+
   }
   if (piece.part === 'pair') {
     if (k === 15) return allows15(b) ? [[seg(15, b)]] : null;
@@ -763,7 +768,7 @@ function proposal(b, piece, k) {
       if (s.k === home) s.k = k;
     });
   } else {
-    p[piece.unit][1].k = k;
+    p[piece.unit][piece.i].k = k;
   }
   p[piece.unit] = collapse(p[piece.unit]);
   return selfOverlap(b, p) ? null : p;
@@ -783,19 +788,26 @@ function laneFree(use, k, a, d, ignore) {
 const canMove = o => o.arrive > TODAY && !o.locked;
 const byDistance = k => Array.from({ length: KENNELS }, (_, i) => i + 1).filter(j => j !== k).sort((m, n) => Math.abs(m - k) - Math.abs(n - k));
 
-// A detour for one unit: it stays in kennel `home`, but moves to another kennel or a holding
-// pen for slots [x, y), which are rounded out to mornings
+// A detour for one unit: it keeps its home kennel at the start and end of the stay, and
+// covers slots [x, y) plus any nights it was already away by moving between kennels, on
+// mornings. Main kennels come first. Holding pens only take the nights nothing else can.
 
-function detour(o, ui, home, x, y, use) {
+function detour(o, ui, x, y, use) {
+  const u = o.placement[ui];
+  const home = u[0].k;
+  const slots = unitSlots(o)[ui];
+  const away = slots.filter(s => s.k !== home);
+  x = Math.min(x, ...away.map(s => s.a));
+  y = Math.max(y, ...away.map(s => s.d));
   x -= x % 2;
   y += y % 2;
-  const s = unitSlots(o)[ui];
-  if (!(s[0].a < x && y < s.at(-1).d)) return null;
-  const lanes = [...byDistance(home), ...((y - x) / 2 <= HOLD_MAX && unitCats(o, ui) <= 2 ? HOLDING : [])];
-  const own = o.placement.filter((u, i) => i !== ui).flat().map(seg => seg.k);
-  const k2 = lanes.find(j => !own.includes(j) && laneFree(use, j, x, y, new Set([o.id])));
-  if (!k2) return null;
-  return [{ k: home, from: o.arrive, to: isoDay(x / 2) }, { k: k2, from: isoDay(x / 2), to: isoDay(y / 2) }, { k: home, from: isoDay(y / 2), to: o.depart }];
+  if (!(slots[0].a < x && y < slots.at(-1).d)) return null;
+  const own = o.placement.filter((v, i) => i !== ui).flat().map(seg => seg.k);
+  const lanes = [home, ...byDistance(home), ...(unitCats(o, ui) <= 2 ? HOLDING : [])].filter(j => !own.includes(j));
+  const mid = route(x, y, lanes, (lane, a, d) => laneFree(use, lane, a, d, new Set([o.id])), Infinity);
+  if (!mid) return null;
+  const segs = mergeSegs([{ k: home, a: slots[0].a, d: x }, ...mid, { k: home, a: y, d: slots.at(-1).d }]);
+  return segs.map((seg, i) => ({ k: seg.k, from: i === 0 ? o.arrive : isoDay(seg.a / 2), to: i === segs.length - 1 ? o.depart : isoDay(seg.d / 2) }));
 }
 
 // Work out a hand move to kennel k. Hand moves can move any number of cats. For each booking
@@ -823,8 +835,8 @@ function planMove(b, piece, k) {
     o.placement.forEach((u, ui) => {
       const hits = mine.filter(m => os[ui].some(s => s.k === m.k && s.a < m.d && m.a < s.d));
       if (!ok || !hits.length) return;
-      const route = u.length === 1 && detour(o, ui, u[0].k, Math.min(...hits.map(m => m.a)), Math.max(...hits.map(m => m.d)), laneUse(current()));
-      if (route) np[ui] = route;
+      const path = detour(o, ui, Math.min(...hits.map(m => m.a)), Math.max(...hits.map(m => m.d)), laneUse(current()));
+      if (path) np[ui] = path;
       else ok = false;
     });
     if (ok) updates.set(o.id, { ...o, placement: np });
@@ -847,9 +859,9 @@ function planMove(b, piece, k) {
     const D = departSlot(b);
     const A = arriveSlot(b);
     const clash = inWay.flatMap(id => unitSlots(updates.get(id) ?? byId(id)).flat().filter(s => s.k === k && s.a < D && A < s.d));
-    const route = detour(updates.get(b.id), piece.unit, k, Math.min(...clash.map(s => s.a)), Math.max(...clash.map(s => s.d)), laneUse(current()));
-    if (route) {
-      const mp = updates.get(b.id).placement.map((u, i) => (i === piece.unit ? route : u));
+    const path = detour(updates.get(b.id), piece.unit, Math.min(...clash.map(s => s.a)), Math.max(...clash.map(s => s.d)), laneUse(current()));
+    if (path) {
+      const mp = updates.get(b.id).placement.map((u, i) => (i === piece.unit ? path : u));
       updates.set(b.id, { ...b, placement: mp, locked: true });
       inWay = inWayNow();
     }
@@ -1191,6 +1203,7 @@ $('optimise').addEventListener('click', async () => {
   btn.textContent = 'Optimising…';
   await nextFrame();
   const res = plan(bookings, planOpts({ mode: 'optimise' }));
+  rehome(res);
   btn.disabled = false;
   btn.textContent = 'Optimise';
   if (!res.changed.length) return toast('The board is already in its best layout.');
@@ -1207,6 +1220,35 @@ $('optimise').addEventListener('click', async () => {
   focusBooking(first.id, false);
   preview.idx = 1;
 });
+
+// Cats with nights still to come in a holding pen move to a main kennel where one is free.
+// Only nights from tomorrow on change.
+
+function rehome(res) {
+  const list = bookings.map(b => ({ ...b, placement: res.placements[b.id] }));
+  for (const b of list) {
+    const p = b.placement;
+    if (!p || b.depart <= TODAY) continue;
+    p.forEach((u, ui) => {
+      const held = unitSlots(b, p)[ui].filter(s => isHolding(s.k) && s.d > 2 * (T + 1));
+      if (!held.length) return;
+      const x = Math.max(2 * (T + 1), Math.min(...held.map(s => s.a)));
+      const y = Math.max(...held.map(s => s.d));
+      const use = laneUse(list);
+      const lanes = [u[0].k, ...byDistance(u[0].k), ...HOLDING];
+      const mid = route(x - (x % 2), y + (y % 2), lanes, (lane, a, d) => laneFree(use, lane, a, d, new Set([b.id])), Infinity);
+      if (!mid || mid.filter(m => isHolding(m.k)).reduce((n, m) => n + m.d - m.a, 0) >= held.reduce((n, s) => n + s.d - Math.max(s.a, x), 0)) return;
+      const slots = unitSlots(b, p)[ui];
+      const before = slots.filter(s => s.a < x).map(s => ({ ...s, d: Math.min(s.d, x - (x % 2)) }));
+      const after = slots.filter(s => s.d > y).map(s => ({ ...s, a: Math.max(s.a, y + (y % 2)) }));
+      const segs = mergeSegs([...before, ...mid, ...after].filter(s => s.a < s.d));
+      if (segs[0].k !== segs.at(-1).k) return;
+      p[ui] = segs.map((seg, i) => ({ k: seg.k, from: i === 0 ? b.arrive : isoDay(seg.a / 2), to: i === segs.length - 1 ? b.depart : isoDay(seg.d / 2) }));
+      res.placements[b.id] = p;
+      if (!res.changed.includes(b.id)) res.changed.push(b.id);
+    });
+  }
+}
 
 async function applyPreview() {
   const rows = [...preview.changed].map(id => ({ ...byId(id), placement: preview.placements[id] }));

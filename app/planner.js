@@ -6,14 +6,15 @@
 // kennel can turn round on the day one booking leaves and the next arrives.
 //
 // A booking needs `kennels` units. Each unit is a list of segments {k, from, to} covering
-// the whole stay. A unit starts and ends in the same kennel. A unit with one cat may move
-// out to one other kennel and back in the middle of the stay, always on a morning.
+// the whole stay. A unit starts and ends in the same kennel. In between it can move to other
+// kennels and back, always on a morning. Optimise only moves units with one cat.
 //
 // The planner only ever chooses kennels. It never changes a booking's dates, times, cats or
 // number of kennels.
 //
-// Holding pens 16 to 23 are a last resort. A cat only goes in one for at most two nights,
-// either for a whole short stay or while it moves out of its kennel mid-stay. Closures block
+// Holding pens 16 to 23 are a last resort. When the planner places a cat itself, a stay in
+// one lasts at most two nights, either for a whole short stay or while the cat is out of its
+// kennel mid-stay. Closures block
 // every kennel and holding pen, from the first closed night up to the day we reopen.
 
 export const KENNELS = 15;
@@ -52,6 +53,59 @@ export function unitSlots(b, placement = b.placement) {
     a: i === 0 ? A : 2 * dayNum(s.from),
     d: i === u.length - 1 ? D : 2 * dayNum(s.to)
   })));
+}
+
+// Cover slots [x, y) for one unit, changing lanes only on mornings. A night in a holding pen
+// costs more than any number of moves between main kennels, so holding pens only fill the
+// nights no main kennel can. Each stay in holding pens lasts at most holdMax nights.
+// Returns segments {k, a, d}, or null if the nights can't be covered.
+
+const ROUTE_HOLD = 1000;
+
+export function route(x, y, lanes, free, holdMax = HOLD_NIGHTS) {
+  const days = (y - x) / 2;
+  if (days <= 0) return [];
+  let prev = null;
+  for (let i = 0; i < days; i++) {
+    const a = x + 2 * i;
+    const cur = new Map();
+    lanes.forEach((lane, j) => {
+      if (!free(lane, a, a + 2)) return;
+      const hold = isHolding(lane);
+      const options = prev ? [...prev.values()] : [null];
+      for (const st of options) {
+        const run = hold ? (st && isHolding(lanes[st.j]) ? st.run + 1 : 1) : 0;
+        if (run > holdMax) continue;
+        const cost = (st ? st.cost : 0) + (hold ? ROUTE_HOLD : 0) + (st && st.j !== j ? 1 : 0);
+        const key = `${j}:${run}`;
+        if (!cur.has(key) || cur.get(key).cost > cost) cur.set(key, { j, run, cost, back: st });
+      }
+    });
+    if (!cur.size) return null;
+    prev = cur;
+  }
+  let best = null;
+  for (const st of prev.values()) if (!best || st.cost < best.cost) best = st;
+  const seq = [];
+  for (let st = best; st; st = st.back) seq.unshift(lanes[st.j]);
+  const segs = [];
+  seq.forEach((lane, i) => {
+    const a = x + 2 * i;
+    if (segs.length && segs.at(-1).k === lane) segs.at(-1).d = a + 2;
+    else segs.push({ k: lane, a, d: a + 2 });
+  });
+  return segs;
+}
+
+// Join neighbouring segments in the same lane
+
+export function mergeSegs(u) {
+  const out = [];
+  for (const s of u) {
+    if (out.length && out.at(-1).k === s.k) out.at(-1).d = s.d;
+    else out.push({ ...s });
+  }
+  return out;
 }
 
 // Fitting a booking beats a night in a holding pen, a holding pen beats any other move, a
@@ -152,7 +206,7 @@ function bookingCost(it, T) {
   let c = (it.joined ? COST.unjoined : COST.apart) * it.miss / 2;
   const needs15 = it.units.length === 1 && it.cats > 2;
   for (const u of it.units) {
-    if (u.length > 1) c += COST.move;
+    c += COST.move * (u.length - 1) / 2;
     for (const s of u) {
       if (isHolding(s.k)) c += COST.holding * (s.d - s.a) / 2;
       else if (s.k === 15 && !needs15) c += COST.big * Math.max(0, s.d - Math.max(s.a, T)) / 2;
@@ -257,16 +311,14 @@ function unitOptions(g, a, d, ks, allowMove, cats) {
     x -= x % 2;
     y += y % 2;
     if (x <= a || y >= d) continue;
-    const away = (y - x) / 2 <= HOLD_NIGHTS ? ks.concat(holds) : ks;
-    for (const k2 of away) {
-      if (k2 !== k && g.free(k2, x, y)) out.push([{ k, a, d: x }, { k: k2, a: x, d: y }, { k, a: y, d }]);
-    }
+    const mid = route(x, y, ks.concat(holds), (lane, s, e) => g.free(lane, s, e));
+    if (mid) out.push(mergeSegs([{ k, a, d: x }, ...mid, { k, a: y, d }]));
   }
   return out;
 }
 
 function unitScore(g, T, u) {
-  return u.reduce((sum, s) => sum + segDelta(g, T, s), 0) + (u.length > 1 ? COST.move : 0);
+  return u.reduce((sum, s) => sum + segDelta(g, T, s) + (isHolding(s.k) ? COST.holding * (s.d - s.a) / 2 : 0), 0) + COST.move * (u.length - 1) / 2;
 }
 
 // Add units one at a time, each in its best spot, on top of the units given
