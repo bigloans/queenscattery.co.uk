@@ -6,11 +6,21 @@
 //
 // Nights run from the arrival date up to the night before departure, so one booking can
 // leave a kennel on the day the next one arrives.
+//
+// Holding pens 16 to 23 are a last resort. A cat only goes in one for at most two nights,
+// either for a whole short stay or while it moves out of its kennel mid-stay. Closures block
+// every kennel and holding pen, from the first closed night up to the day we reopen.
 
 export const KENNELS = 15;
 export const PAIRS = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14]];
+export const HOLDING = [16, 17, 18, 19, 20, 21, 22, 23];
+export const LANES = 23;
+export const isHolding = k => k > KENNELS;
 export const capacity = k => (k === 15 ? 3 : 2);
 export const mateOf = k => (k < KENNELS ? (k % 2 ? k + 1 : k - 1) : 0);
+
+const HOLD_NIGHTS = 2;
+const CLOSED = -1;
 
 export const dayNum = iso => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 864e5;
 export const isoDay = n => new Date(n * 864e5).toISOString().slice(0, 10);
@@ -19,13 +29,14 @@ export const todayIso = () => {
   return isoDay(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5);
 };
 
-// Fitting a booking beats any move, a move beats an unjoined pen, and an unjoined pen beats
-// short gaps between bookings. Short gaps are hard to fill, so each night in one costs more
-// than a night in a longer gap, and gaps of three weeks or more cost nothing. An owner's
-// kennels sit side by side even when they aren't joined, and kennel 15 is kept for bookings
-// that need its extra space.
+// Fitting a booking beats a night in a holding pen, a holding pen beats any other move, a
+// move beats an unjoined pen, and an unjoined pen beats short gaps between bookings. Short
+// gaps are hard to fill, so each night in one costs more than a night in a longer gap, and
+// gaps of three weeks or more cost nothing. An owner's kennels sit side by side even when
+// they aren't joined, and kennel 15 is kept for bookings that need its extra space.
 
-const COST = { unplaced: 1e6, move: 1000, unjoined: 15, apart: 2, big: 3, gap: 3, halfPair: 0.2 };
+const COST = { unplaced: 1e6, holding: 3000, move: 1000, unjoined: 15, apart: 2, big: 3, gap: 3, halfPair: 0.2 };
+
 // Moving a booking that already has a kennel. When adding bookings this costs more than any
 // preference but less than a mid-stay move, so others only move to make room.
 
@@ -44,7 +55,7 @@ class Grid {
     this.T = T;
     this.s = start;
     this.e = end;
-    this.c = Array.from({ length: KENNELS + 1 }, () => new Int32Array(end - start));
+    this.c = Array.from({ length: LANES + 1 }, () => new Int32Array(end - start));
   }
 
   at(k, t) {
@@ -73,7 +84,7 @@ const validUnits = (it, units) => {
   const single15 = units.length === 1 && allows15(it) && units[0].every(s => s.k === 15);
   if (units.length !== it.kennels && !single15) return false;
   return units.every(u => u.length && u[0].a === it.a && u.at(-1).d === it.d && u[0].k === u.at(-1).k
-    && u.every((s, i) => s.k >= 1 && s.k <= KENNELS && s.a < s.d && (!i || s.a === u[i - 1].d)));
+    && u.every((s, i) => s.k >= 1 && s.k <= LANES && s.a < s.d && (!i || s.a === u[i - 1].d)));
 };
 
 const kennelOn = (unit, t) => unit.find(s => s.a <= t && t < s.d)?.k;
@@ -110,7 +121,10 @@ function bookingCost(it, T) {
   const needs15 = it.units.length === 1 && it.cats > 2;
   for (const u of it.units) {
     if (u.length > 1) c += COST.move;
-    if (!needs15) for (const s of u) if (s.k === 15) c += COST.big * (s.d - Math.max(s.a, T));
+    for (const s of u) {
+      if (isHolding(s.k)) c += COST.holding * (s.d - s.a);
+      else if (s.k === 15 && !needs15) c += COST.big * (s.d - Math.max(s.a, T));
+    }
   }
   return c;
 }
@@ -119,7 +133,7 @@ function bookingCost(it, T) {
 
 function segDelta(g, T, { k, a, d }) {
   const lo = Math.max(a, T);
-  if (lo >= d) return 0;
+  if (lo >= d || isHolding(k)) return 0;
   let p = lo - 1;
   while (p >= T && !g.at(k, p)) p--;
   const prevEnd = p >= T ? p + 1 : T;
@@ -186,12 +200,15 @@ function tryPlace(g, it, units, T, wChanged) {
   return score;
 }
 
-// Ways to place one unit. Moves are only offered when the unit can't stay in one kennel.
+// Ways to place one unit. Moves and holding pens are only offered when the unit can't stay
+// in one kennel. Holding pens take up to 2 cats, so a unit that needs kennel 15 can't use them.
 
 function unitOptions(g, a, d, ks, allowMove) {
   const out = [];
   for (const k of ks) if (g.free(k, a, d)) out.push([{ k, a, d }]);
   if (out.length || !allowMove) return out;
+  const holds = ks.length > 1 ? HOLDING : [];
+  if (d - a <= HOLD_NIGHTS) for (const h of holds) if (g.free(h, a, d)) out.push([{ k: h, a, d }]);
   for (const k of ks) {
     if (g.at(k, a) || g.at(k, d - 1)) continue;
     let x = -1;
@@ -203,7 +220,8 @@ function unitOptions(g, a, d, ks, allowMove) {
       }
     }
     if (x < 0) continue;
-    for (const k2 of ks) {
+    const away = y - x <= HOLD_NIGHTS ? ks.concat(holds) : ks;
+    for (const k2 of away) {
       if (k2 !== k && g.free(k2, x, y)) out.push([{ k, a, d: x }, { k: k2, a: x, d: y }, { k, a: y, d }]);
     }
   }
@@ -311,7 +329,7 @@ function improve(g, items, T, wChanged, ms) {
         for (let t = seed.a; t < seed.d && ok; t++) {
           const v = g.at(k, t);
           if (!v) continue;
-          if (items[v - 1].fixed) ok = false;
+          if (v === CLOSED || items[v - 1].fixed) ok = false;
           else group.add(items[v - 1]);
         }
       }
@@ -354,16 +372,22 @@ function improve(g, items, T, wChanged, ms) {
 // mode 'insert' places bookings with no kennel, moving others only if it has to.
 // mode 'optimise' rearranges every booking that hasn't started and isn't locked.
 
-export function plan(bookings, { today = todayIso(), mode = 'insert', ms } = {}) {
+export function plan(bookings, { today = todayIso(), mode = 'insert', ms, closures = [] } = {}) {
   const T = dayNum(today);
   const items = prepare(bookings, T);
-  if (!items.length) return { placements: {}, changed: [], unplaced: [], clashes: [], moves: [] };
+  if (!items.length) return { placements: {}, changed: [], unplaced: [], clashes: [], moves: [], holding: [] };
 
   const start = Math.min(T, ...items.map(it => it.a));
   const end = Math.max(T + 1, ...items.map(it => it.d)) + 1;
   const g = new Grid(start, end, T);
   const clashes = new Set();
   const wChanged = CHANGED[mode];
+
+  for (const c of closures) {
+    const a = Math.max(dayNum(c.from), start);
+    const d = Math.min(dayNum(c.to), end);
+    if (a < d) for (let k = 1; k <= LANES; k++) g.set(k, a, d, CLOSED);
+  }
 
   // Fixed bookings keep their kennels even if they clash, so clashes show on the board
 
@@ -372,7 +396,8 @@ export function plan(bookings, { today = todayIso(), mode = 'insert', ms } = {})
       for (const s of u) {
         for (let t = s.a; t < s.d; t++) {
           const other = g.at(s.k, t);
-          if (other && other !== it.v) clashes.add(it.id).add(items[other - 1].id);
+          if (other === CLOSED) clashes.add(it.id);
+          else if (other && other !== it.v) clashes.add(it.id).add(items[other - 1].id);
           else g.set(s.k, t, t + 1, it.v);
         }
       }
@@ -401,7 +426,8 @@ export function plan(bookings, { today = todayIso(), mode = 'insert', ms } = {})
     changed: items.filter(it => it.units && keyOf(it.units) !== it.orig).map(it => it.id),
     unplaced: items.filter(it => !it.units).map(it => it.id),
     clashes: [...clashes],
-    moves: items.filter(it => it.units?.some(u => u.length > 1)).map(it => it.id)
+    moves: items.filter(it => it.units?.some(u => u.length > 1)).map(it => it.id),
+    holding: items.filter(it => it.units?.some(u => u.some(s => isHolding(s.k)))).map(it => it.id)
   };
 }
 

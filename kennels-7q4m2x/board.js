@@ -1,4 +1,4 @@
-import { KENNELS, PAIRS, mateOf, dayNum, isoDay, todayIso, plan, blockers } from '../app/planner.js';
+import { KENNELS, LANES, HOLDING, PAIRS, isHolding, mateOf, dayNum, isoDay, todayIso, plan, blockers } from '../app/planner.js';
 import * as store from '../app/store.js';
 
 const $ = id => document.getElementById(id);
@@ -7,6 +7,10 @@ const T = dayNum(TODAY);
 const PALETTE = ['#dfe8d8', '#f3dfc9', '#d9e6ee', '#efd9df', '#e6e0f0', '#f2ecc6', '#d6ebe4', '#eadfd3'];
 
 let bookings = [];
+let closures = [];
+let closuresMissing = false;
+let showHolding = false;
+let holdingPref = null;
 let preview = null;
 let clashes = new Set();
 let pieces = new Map();
@@ -36,6 +40,17 @@ const addMonths = (n, m) => {
 };
 const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r)));
 
+const kname = k => (isHolding(k) ? `holding pen ${k - KENNELS}` : `kennel ${k}`);
+const kshort = k => (isHolding(k) ? `H${k - KENNELS}` : `${k}`);
+const planOpts = extra => ({ closures: store.closedNights(closures), ...extra });
+const closureOn = n => closures.find(c => dayNum(c.closed_from) <= n && n < dayNum(c.reopens));
+const closureDuring = b => closures.find(c => c.closed_from < b.depart && b.arrive < c.reopens);
+const holdNights = p => p ? p.flat().filter(s => isHolding(s.k)) : [];
+
+// Holding pens show when asked for, or whenever an upcoming booking uses one
+
+const usesHolding = () => bookings.some(b => b.depart > TODAY && holdNights(placementOf(b)).length);
+
 const allows15 = b => b.joined && +b.kennels === 2 && +b.cats <= 3;
 const seg = (k, b) => ({ k, from: b.arrive, to: b.depart });
 const placementOf = b => (preview ? preview.placements[b.id] : b.placement);
@@ -43,24 +58,33 @@ const isPair = p => p?.length === 2 && p.every(u => u.length === 1) && mateOf(p[
 
 // Layout
 
-const L = { row: 28, dateW: 128, colW: 60, gap: 8, mobile: false };
+const L = { row: 28, dateW: 128, colW: 60, holdW: 44, gap: 8, mobile: false };
+const HOLD_SHARE = 0.7;
 
 function measure() {
   const css = getComputedStyle(document.documentElement);
+  showHolding = holdingPref ?? usesHolding();
   L.mobile = matchMedia('(max-width: 700px)').matches;
   L.row = parseFloat(css.getPropertyValue('--row'));
   L.dateW = parseFloat(css.getPropertyValue('--date-w'));
   L.gap = L.mobile ? 4 : 8;
-  const room = $('scroller').clientWidth - L.dateW - 7 * L.gap - 4;
-  L.colW = L.mobile ? 42 : Math.max(52, Math.min(110, Math.floor(room / KENNELS)));
+  const holdGap = showHolding ? 3 * L.gap : 0;
+  const room = $('scroller').clientWidth - L.dateW - 7 * L.gap - holdGap - 4;
+  const cols = KENNELS + (showHolding ? HOLDING.length * HOLD_SHARE : 0);
+  L.colW = L.mobile ? 42 : Math.max(52, Math.min(110, Math.floor(room / cols)));
+  L.holdW = Math.round(L.colW * HOLD_SHARE);
 }
 
-const laneX = k => (k - 1) * L.colW + Math.floor((k - 1) / 2) * L.gap;
-const lanesWidth = () => laneX(KENNELS) + L.colW;
+const lastLane = () => (showHolding ? LANES : KENNELS);
+const laneW = k => (isHolding(k) ? L.holdW : L.colW);
+const laneX = k => (isHolding(k)
+  ? laneX(KENNELS) + L.colW + 3 * L.gap + (k - KENNELS - 1) * L.holdW
+  : (k - 1) * L.colW + Math.floor((k - 1) / 2) * L.gap);
+const lanesWidth = () => laneX(lastLane()) + laneW(lastLane());
 
 function kennelAtX(x) {
   let best = 1;
-  for (let k = 1; k <= KENNELS; k++) if (x >= laneX(k) - L.gap / 2) best = k;
+  for (let k = 1; k <= lastLane(); k++) if (x >= laneX(k) - L.gap / 2) best = k;
   return best;
 }
 
@@ -71,8 +95,8 @@ function describe(b, p = placementOf(b)) {
   if (p.length === 1 && p[0].length === 1 && p[0][0].k === 15 && +b.kennels === 2) return 'Kennel 15, in place of 2 joined kennels';
   if (isPair(p)) return `Kennels ${Math.min(p[0][0].k, p[1][0].k)} and ${Math.max(p[0][0].k, p[1][0].k)}, joined`;
   const parts = p.map(u => {
-    if (u.length === 1) return `kennel ${u[0].k}`;
-    return `kennel ${u[0].k}, moving to ${u[1].k} on ${niceDate(u[1].from)} and back on ${niceDate(u[1].to)}`;
+    if (u.length === 1) return kname(u[0].k);
+    return `${kname(u[0].k)}, moving to ${kname(u[1].k)} on ${niceDate(u[1].from)} and back on ${niceDate(u[1].to)}`;
   });
   const text = parts.join('; ');
   return text[0].toUpperCase() + text.slice(1);
@@ -89,10 +113,15 @@ function buildStatic() {
   $('heads').style.width = `${lanesWidth()}px`;
   let heads = '';
   for (let k = 1; k <= KENNELS; k++) {
-    heads += `<div class="kh" style="left:${laneX(k)}px;width:${L.colW}px">${k}${k === 15 && !L.mobile ? '<small>up to 3 cats</small>' : ''}</div>`;
+    heads += `<div class="kh" style="left:${laneX(k)}px;width:${L.colW}px">${k}${k === 15 && L.colW >= 72 ? '<small>up to 3 cats</small>' : ''}</div>`;
   }
   for (const [p] of PAIRS) heads += `<div class="pairline" style="left:${laneX(p) + 6}px;width:${2 * L.colW - 12}px" title="Kennels ${p} and ${p + 1} can be joined"></div>`;
+  if (showHolding) {
+    for (const k of HOLDING) heads += `<div class="kh hold" style="left:${laneX(k)}px;width:${L.holdW}px" title="Holding pen ${k - KENNELS}">${kshort(k)}</div>`;
+  }
   $('heads').innerHTML = heads;
+  $('holding').textContent = showHolding ? 'Hide holding' : 'Holding pens';
+  $('holding').setAttribute('aria-pressed', showHolding);
 
   const dates = $('dates');
   dates.textContent = '';
@@ -102,7 +131,7 @@ function buildStatic() {
     const row = document.createElement('div');
     const dow = new Date(n * 864e5).getUTCDay();
     const first = new Date(n * 864e5).getUTCDate() === 1;
-    row.className = `date${dow === 0 || dow === 6 ? ' weekend' : ''}${first ? ' month' : ''}${n === T ? ' today' : ''}${n < T ? ' past' : ''}`;
+    row.className = `date${dow === 0 || dow === 6 ? ' weekend' : ''}${first ? ' month' : ''}${n === T ? ' today' : ''}${n < T ? ' past' : ''}${closureOn(n) ? ' closed' : ''}`;
     row.textContent = L.mobile
       ? `${fmt(n, { weekday: 'narrow' })} ${fmt(n, { day: 'numeric' })}${first ? ' ' + fmt(n, { month: 'short' }) : ''}`
       : fmt(n, { weekday: 'short', day: 'numeric', month: 'short' });
@@ -146,7 +175,7 @@ function cardHtml(b, piece, key) {
   const lo = Math.min(...piece.ks);
   const hi = Math.max(...piece.ks);
   const left = laneX(lo) + 2;
-  const width = laneX(hi) + L.colW - laneX(lo) - 4;
+  const width = laneX(hi) + laneW(hi) - laneX(lo) - 4;
   const top = (piece.a - start) * L.row + 1;
   const height = (piece.d - piece.a) * L.row - 2;
   const rows = piece.d - piece.a;
@@ -155,18 +184,19 @@ function cardHtml(b, piece, key) {
   const p = placementOf(b);
   const classes = ['card'];
   if (piece.part === 'away') classes.push('away');
+  if (isHolding(lo)) classes.push('held');
   if (clashes.has(b.id)) classes.push('clash');
   if (preview?.changed.has(b.id)) classes.push('changed');
   if (b.locked) classes.push('locked');
 
   let lines = `<b>${esc(name)}</b>`;
   if (piece.part === 'away') {
-    lines = `<b>↪ ${esc(name)}</b>${rows > 1 ? `<span>Back to ${piece.home} ${esc(shortDate(dayNum(piece.back)))}</span>` : ''}`;
+    lines = `<b>↪ ${esc(name)}</b>${rows > 1 ? `<span>Back to ${kshort(piece.home)} ${esc(shortDate(dayNum(piece.back)))}</span>` : ''}`;
   } else {
     if (rows > 1) lines += `<span>${esc(cats)}</span>`;
     if (rows > 2) {
       lines += piece.d < dayNum(b.depart)
-        ? `<span>To ${piece.away} ${esc(shortDate(piece.d))}</span>`
+        ? `<span>To ${kshort(piece.away)} ${esc(shortDate(piece.d))}</span>`
         : `<span>Leaves ${esc(shortDate(piece.d))}</span>`;
     }
   }
@@ -194,19 +224,27 @@ function render() {
           const cell = occ[t - start];
           const other = cell.get(s.k);
           if (other && other !== b.id) clashes.add(other).add(b.id);
+          if (closureOn(t)) clashes.add(b.id);
           cell.set(s.k, b.id);
         }
       }
     }
   }
   occ.forEach((cell, i) => {
-    const free = KENNELS - cell.size;
-    freeEls[i].textContent = free ? `${free} free` : 'Full';
-    freeEls[i].classList.toggle('full', !free);
+    const closed = closureOn(start + i);
+    const free = KENNELS - [...cell.keys()].filter(k => !isHolding(k)).length;
+    freeEls[i].textContent = closed ? 'Closed' : free ? `${free} free` : 'Full';
+    freeEls[i].classList.toggle('full', !free && !closed);
   });
 
   let html = '';
-  for (let k = 1; k <= KENNELS; k++) html += `<div class="lane" style="left:${laneX(k)}px;width:${L.colW}px"></div>`;
+  for (let k = 1; k <= lastLane(); k++) html += `<div class="lane${isHolding(k) ? ' hold' : ''}" style="left:${laneX(k)}px;width:${laneW(k)}px"></div>`;
+  for (const c of closures) {
+    const a = Math.max(dayNum(c.closed_from), start);
+    const d = Math.min(dayNum(c.reopens), end);
+    if (a >= d) continue;
+    html += `<div class="closure" style="top:${(a - start) * L.row}px;height:${(d - a) * L.row}px"><span>Closed${c.note ? ` · ${esc(c.note)}` : ''}</span></div>`;
+  }
   html += `<div class="band past" style="top:0;height:${(T - start) * L.row}px"></div>`;
   for (let n = start; n < end; n++) {
     const date = new Date(n * 864e5);
@@ -237,14 +275,18 @@ function renderNotices() {
   if (store.demo) {
     out.push(`<div class="notice demo"><span class="grow">Demo mode. Bookings are saved in this browser only until Supabase is connected.</span></div>`);
   }
+  if (closuresMissing) {
+    out.push(`<div class="notice waiting"><span class="grow">Closures need one more setup step in Supabase before they can be saved.</span></div>`);
+  }
   if (preview) {
-    const { changed, placedNow, midStay } = preview;
+    const { changed, placedNow, midStay, held } = preview;
     const moved = changed.size - placedNow;
     const parts = [];
     if (moved) parts.push(`move ${plural(moved, 'booking')}`);
     if (placedNow) parts.push(`find kennels for ${placedNow} that ${placedNow === 1 ? 'has' : 'have'} none`);
     let text = `Optimise would ${parts.join(' and ')}.`;
     if (midStay) text += ` ${plural(midStay, 'booking')} would need a cat moved mid-stay.`;
+    if (held) text += ` ${plural(held, 'booking')} would use a holding pen.`;
     out.push(`<div class="notice preview"><span class="grow">${text} Changes are outlined in orange.</span>
       <button class="btn" data-act="next-change">Next change</button>
       <button class="btn" data-act="cancel-preview">Cancel</button>
@@ -255,9 +297,14 @@ function renderNotices() {
     out.push(`<div class="notice waiting"><span>${plural(waiting.length, 'booking')} with no kennel yet:</span>
       ${waiting.map(b => `<button class="chip" data-open="${b.id}">${esc(b.name || 'No name')}, ${esc(niceDate(b.arrive))}</button>`).join('')}</div>`);
   }
+  const held = bookings.filter(b => b.depart > TODAY && holdNights(placementOf(b)).length).sort((x, y) => x.arrive.localeCompare(y.arrive));
+  if (held.length) {
+    out.push(`<div class="notice waiting"><span>${held.length === 1 ? 'This booking uses' : 'These bookings use'} a holding pen:</span>
+      ${held.map(b => `<button class="chip" data-open="${b.id}">${esc(b.name || 'No name')}, ${esc(niceDate(holdNights(placementOf(b))[0].from))}</button>`).join('')}</div>`);
+  }
   if (clashes.size) {
     const list = [...clashes].map(byId).filter(Boolean);
-    out.push(`<div class="notice waiting"><span>These bookings share a kennel on some nights:</span>
+    out.push(`<div class="notice waiting"><span>These bookings share a kennel, or fall in a closure:</span>
       ${list.map(b => `<button class="chip" data-open="${b.id}">${esc(b.name || 'No name')}, ${esc(niceDate(b.arrive))}</button>`).join('')}</div>`);
   }
   $('notices').innerHTML = out.join('');
@@ -400,12 +447,24 @@ async function commit(rows, message, { undoable = true } = {}) {
   if (message) toast(message, undo);
 }
 
+async function loadClosures() {
+  try {
+    closures = await store.loadClosures();
+    closuresMissing = false;
+  } catch {
+    closures = [];
+    closuresMissing = true;
+  }
+}
+
 async function reload() {
   try {
     bookings = await store.load();
   } catch (err) {
     return toast(`Couldn't load bookings: ${err.message}`);
   }
+  await loadClosures();
+  measure();
   const keepTop = scroller.scrollTop;
   const oldStart = start;
   buildStatic();
@@ -435,8 +494,16 @@ function collapse(u) {
 
 // The placement a booking would have if this piece went to kennel k
 
+const HOLD_MAX = 2;
+const nights = s => dayNum(s.to) - dayNum(s.from);
+
 function proposal(b, piece, k) {
   const p = structuredClone(placementOf(b));
+  if (isHolding(k)) {
+    if (piece.part === 'pair' || piece.part === 'home') return null;
+    if (piece.part === 'whole' && (dayNum(b.depart) - dayNum(b.arrive) > HOLD_MAX || +b.cats > 2)) return null;
+    if (piece.part === 'away' && nights(p[piece.unit][1]) > HOLD_MAX) return null;
+  }
   if (piece.part === 'pair') {
     if (k === 15) return allows15(b) ? [[seg(15, b)]] : null;
     const lo = k % 2 ? k : k - 1;
@@ -463,13 +530,14 @@ function proposal(b, piece, k) {
 function planMove(b, piece, k) {
   const p = proposal(b, piece, k);
   const name = b.name || 'That booking';
-  if (!p) return { error: `${name} can't go in kennel ${k}.` };
+  if (!p) return { error: isHolding(k) ? 'Holding pens take up to 2 cats for 2 nights at most, partway through a stay or for a short stay.' : `${name} can't go in ${kname(k)}.` };
   if (JSON.stringify(p) === JSON.stringify(b.placement)) return { same: true };
   const moved = { ...b, placement: p, locked: true };
   const others = bookings.filter(x => x.id !== b.id);
   const inWay = blockers(others, b.id, p);
   if (!inWay.length) {
-    return { rows: [moved], message: `Moved ${name} to ${describe(moved, p).toLowerCase()}. It's locked, so Optimise leaves it there.` };
+    const held = holdNights(p).length ? ' This uses a holding pen.' : '';
+    return { rows: [moved], message: `Moved ${name} to ${describe(moved, p).toLowerCase()}. It's locked, so Optimise leaves it there.${held}` };
   }
 
   const from = piece.ks[0];
@@ -483,7 +551,7 @@ function planMove(b, piece, k) {
     }
   }
   const names = inWay.map(id => byId(id)?.name || 'another booking');
-  return { error: `Kennel ${k} is taken by ${names.slice(0, 2).join(' and ')}${names.length > 2 ? ' and others' : ''} on some of those nights.` };
+  return { error: `${kname(k)[0].toUpperCase() + kname(k).slice(1)} is taken by ${names.slice(0, 2).join(' and ')}${names.length > 2 ? ' and others' : ''} on some of those nights.` };
 }
 
 function moveTo(b, piece, k) {
@@ -516,9 +584,9 @@ lanes.addEventListener('pointermove', e => {
   const x = e.clientX - lanes.getBoundingClientRect().left;
   let k = kennelAtX(x);
   const wide = drag.piece.part === 'pair';
-  if (wide && k !== 15) k = k % 2 ? k : k - 1;
+  if (wide && k < 15) k = k % 2 ? k : k - 1;
   drag.k = k;
-  const width = wide && k !== 15 ? laneX(k + 1) + L.colW - laneX(k) - 4 : L.colW - 4;
+  const width = wide && k < 15 ? laneX(k + 1) + L.colW - laneX(k) - 4 : laneW(k) - 4;
   drag.ghost.style.left = `${laneX(k) + 2}px`;
   drag.ghost.style.width = `${width}px`;
   const m = planMove(drag.b, drag.piece, k);
@@ -579,7 +647,11 @@ function renderWhere(b) {
     where.innerHTML = '<p>Fill in the stay and save. The board finds the best kennel for it.</p>';
     return;
   }
+  const closed = closureDuring(b);
   let html = p ? `<p><b>${esc(describe(b, p))}</b></p>` : '<p class="warn">No kennel yet. There’s no room on these dates as the board stands.</p>';
+  if (closed) html += `<p class="warn">This stay falls in a closure, ${esc(niceDate(closed.closed_from))} until ${esc(niceDate(closed.reopens))}.</p>`;
+  const held = holdNights(p);
+  if (held.length) html += `<p class="warn">Uses ${esc(kname(held[0].k))} from ${esc(niceDate(held[0].from))} to ${esc(niceDate(held[0].to))}.</p>`;
   if (p) {
     const options = isPair(p) || (p.length === 1 && +b.kennels === 2)
       ? [...PAIRS.map(([x, y]) => [x, `Kennels ${x} and ${y}`]), ...(allows15(b) ? [[15, 'Kennel 15']] : [])].map(([v, label]) => `<option value="${v}">${label}</option>`).join('')
@@ -645,6 +717,7 @@ $('panel-close').addEventListener('click', closePanel);
 $('cancel').addEventListener('click', closePanel);
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !panel.hidden) closePanel();
+  if (e.key === 'Escape') closuresPanel.hidden = true;
 });
 
 $('add').addEventListener('click', () => {
@@ -680,8 +753,19 @@ $('save').addEventListener('click', async () => {
   }
 
   const row = old ? { ...old, ...fields, placement: null, locked: false } : store.blank(fields);
+  const closed = closureDuring(row);
+  if (closed && !confirm(`We're closed from ${niceDate(closed.closed_from)} until ${niceDate(closed.reopens)}, so this stay can't have a kennel. Save it anyway?`)) return;
   const list = bookings.filter(b => b.id !== row.id).concat(row);
-  const res = plan(list);
+  const res = plan(list, planOpts());
+  const heldIds = res.holding.filter(id => id === row.id || res.changed.includes(id));
+  if (heldIds.length) {
+    const lines = heldIds.map(id => {
+      const b = list.find(x => x.id === id);
+      const h = holdNights(res.placements[id])[0];
+      return `${b.name || 'A booking'} in ${kname(h.k)} from ${niceDate(h.from)} to ${niceDate(h.to)}`;
+    });
+    if (!confirm(`This only fits by using a holding pen:\n\n${lines.join('\n')}\n\nGo ahead?`)) return;
+  }
   const changed = list
     .filter(b => b.id === row.id || res.changed.includes(b.id))
     .map(b => ({ ...b, placement: res.placements[b.id] }));
@@ -689,7 +773,7 @@ $('save').addEventListener('click', async () => {
   const placed = changed.find(b => b.id === row.id);
   closePanel();
   const msg = placed.placement
-    ? `${old ? 'Saved' : 'Added'}, in ${describe(placed).toLowerCase()}${moved ? `. ${plural(moved, 'other booking')} moved to make room` : ''}.`
+    ? `${old ? 'Saved' : 'Added'}, in ${describe(placed).toLowerCase()}${moved ? `. ${plural(moved, 'other booking')} moved to make room` : ''}${heldIds.length ? '. Uses a holding pen' : ''}.`
     : 'Saved, but there’s no room on those dates. It’s listed above the board.';
   await commit(changed, msg);
   focusBooking(row.id, false);
@@ -718,7 +802,7 @@ $('optimise').addEventListener('click', async () => {
   btn.disabled = true;
   btn.textContent = 'Optimising…';
   await nextFrame();
-  const res = plan(bookings, { mode: 'optimise' });
+  const res = plan(bookings, planOpts({ mode: 'optimise' }));
   btn.disabled = false;
   btn.textContent = 'Optimise';
   if (!res.changed.length) return toast('The board is already in its best layout.');
@@ -727,6 +811,7 @@ $('optimise').addEventListener('click', async () => {
     changed: new Set(res.changed),
     placedNow: res.changed.filter(id => !byId(id).placement).length,
     midStay: res.moves.filter(id => res.changed.includes(id)).length,
+    held: res.holding.filter(id => res.changed.includes(id)).length,
     idx: 0
   };
   render();
@@ -741,10 +826,81 @@ async function applyPreview() {
   await commit(rows, `Moved ${plural(rows.length, 'booking')}.`);
 }
 
+// Holding pens toggle
+
+$('holding').addEventListener('click', () => {
+  holdingPref = !showHolding;
+  measure();
+  buildStatic();
+  render();
+});
+
+// Closures
+
+const closuresPanel = $('closures-panel');
+const closureForm = $('closure-form');
+
+function renderClosures() {
+  const list = $('closure-list');
+  const upcoming = closures.filter(c => c.reopens > TODAY);
+  list.innerHTML = upcoming.length
+    ? upcoming.map(c => `<li><span><b>${esc(niceDate(c.closed_from))}</b> until <b>${esc(niceDate(c.reopens))}</b>${c.note ? `<br><small>${esc(c.note)}</small>` : ''}</span>
+        <button class="btn danger" type="button" data-remove="${c.id}">Remove</button></li>`).join('')
+    : '<li class="muted">No closures coming up.</li>';
+}
+
+$('closures').addEventListener('click', () => {
+  renderClosures();
+  closureForm.closed_from.value = '';
+  closureForm.reopens.value = '';
+  closureForm.note.value = '';
+  closuresPanel.hidden = false;
+});
+$('closures-close').addEventListener('click', () => (closuresPanel.hidden = true));
+
+$('closure-add').addEventListener('click', async () => {
+  const c = {
+    id: crypto.randomUUID(),
+    closed_from: closureForm.closed_from.value,
+    reopens: closureForm.reopens.value,
+    note: closureForm.note.value.trim()
+  };
+  if (!c.closed_from || !c.reopens || c.reopens <= c.closed_from) return toast('The reopening date needs to be after the first closed night.');
+  const hit = bookings.filter(b => b.placement && b.arrive < c.reopens && c.closed_from < b.depart);
+  if (hit.length && !confirm(`${plural(hit.length, 'booking')} already fall in these dates:\n\n${hit.map(b => `${b.name}, ${niceDate(b.arrive)} to ${niceDate(b.depart)}`).join('\n')}\n\nAdd the closure anyway?`)) return;
+  try {
+    await store.saveClosure(c);
+  } catch (err) {
+    return toast(`Couldn't save the closure: ${err.message}`);
+  }
+  closures = [...closures, c].sort((x, y) => x.closed_from.localeCompare(y.closed_from));
+  renderClosures();
+  closureForm.closed_from.value = '';
+  closureForm.reopens.value = '';
+  closureForm.note.value = '';
+  buildStatic();
+  render();
+  toast(`Closed from ${niceDate(c.closed_from)} until ${niceDate(c.reopens)}.`);
+});
+
+$('closure-list').addEventListener('click', async e => {
+  const id = e.target.closest('[data-remove]')?.dataset.remove;
+  if (!id) return;
+  try {
+    await store.removeClosure(id);
+  } catch (err) {
+    return toast(`Couldn't remove it: ${err.message}`);
+  }
+  closures = closures.filter(c => c.id !== id);
+  renderClosures();
+  buildStatic();
+  render();
+});
+
 // Start up
 
 window.addEventListener('focus', () => {
-  if (!$('app').hidden && panel.hidden && !preview && !drag) reload();
+  if (!$('app').hidden && panel.hidden && closuresPanel.hidden && !preview && !drag) reload();
 });
 
 let resizeTimer;
@@ -788,6 +944,7 @@ async function showApp() {
   } catch (err) {
     toast(`Couldn't load bookings: ${err.message}`);
   }
+  await loadClosures();
   measure();
   buildStatic();
   render();

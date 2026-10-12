@@ -242,13 +242,16 @@
 
   // Where a placement puts the cats, in words
 
+  const kname = k => (k > 15 ? `holding pen ${k - 15}` : `kennel ${k}`);
+  const held = p => p.flat().find(s => s.k > 15);
+
   const where = p => {
     if (p.length === 2 && p.every(u => u.length === 1) && Math.abs(p[0][0].k - p[1][0].k) === 1 && Math.min(p[0][0].k, p[1][0].k) % 2) {
       return `kennels ${Math.min(p[0][0].k, p[1][0].k)} and ${Math.max(p[0][0].k, p[1][0].k)}, joined`;
     }
     const ks = p.map(u => u[0].k);
-    const mid = p.some(u => u.length > 1) ? ', with a move mid-stay' : '';
-    return `${ks.length > 1 ? 'kennels' : 'kennel'} ${ks.join(' and ')}${mid}`;
+    if (ks.length === 1) return kname(ks[0]) + (p[0].length > 1 ? `, moving to ${kname(p[0][1].k)} mid-stay` : '');
+    return `kennels ${ks.join(' and ')}${p.some(u => u.length > 1) ? ', with a move mid-stay' : ''}`;
   };
 
   const rowsFor = () => stays.map(stay => store.blank({
@@ -268,6 +271,8 @@
   }));
 
   let all = [];
+  let closures = [];
+  let needsHolding = false;
 
   async function check() {
     $('board-login').hidden = true;
@@ -275,6 +280,7 @@
     $('board-status').textContent = 'Checking the board…';
     try {
       all = await store.load();
+      closures = await store.loadClosures().catch(() => []);
     } catch (err) {
       $('board-status').textContent = `Couldn't load the board: ${err.message}`;
       return;
@@ -282,27 +288,37 @@
     const rows = rowsFor();
     const done = rows.map(r => all.find(b => b.source === r.source));
     const fresh = rows.filter((r, i) => !done[i]);
-    const res = plan([...all, ...fresh]);
+    const res = plan([...all, ...fresh], { closures: store.closedNights(closures) });
     const freshIds = new Set(fresh.map(r => r.id));
     const moved = res.changed.filter(id => !freshIds.has(id)).length;
 
     const lines = rows.map((r, i) => {
       const dates = `${shortDate(r.arrive)} to ${shortDate(r.depart)}`;
       if (done[i]) return `${dates}: already on the board${done[i].placement ? `, in ${where(done[i].placement)}` : ', with no kennel yet'}.`;
+      const closed = closures.find(c => c.closed_from < r.depart && r.arrive < c.reopens);
+      if (closed) return `${dates}: we're closed from ${shortDate(closed.closed_from)} until ${shortDate(closed.reopens)}.`;
       const p = res.placements[r.id];
       return p ? `${dates}: fits in ${where(p)}.` : `${dates}: no room as the board stands.`;
     });
     if (fresh.length && moved) lines.push(`${plural(moved, 'other booking')} would move to make room.`);
+    const heldIds = res.holding.filter(id => freshIds.has(id) || res.changed.includes(id));
+    needsHolding = heldIds.length > 0;
+    for (const id of heldIds) {
+      const b = [...all, ...fresh].find(x => x.id === id);
+      const h = held(res.placements[id]);
+      lines.push(`⚠ ${freshIds.has(id) ? 'This' : b.name || 'Another booking'} would use ${kname(h.k)} from ${shortDate(h.from)} to ${shortDate(h.to)}.`);
+    }
     $('board-status').innerHTML = lines.map(l => `<span style="display:block">${l.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</span>`).join('');
     $('board-add').hidden = !fresh.length || document.querySelector('[name=answer]:checked').value !== 'yes';
   }
 
   $('board-add').addEventListener('click', async () => {
     const btn = $('board-add');
+    if (needsHolding && !confirm('This only fits by using a holding pen. Add it to the board anyway?')) return;
     btn.disabled = true;
     try {
       const rows = rowsFor().filter(r => !all.some(b => b.source === r.source));
-      const { unplaced } = await store.addAndPlace(rows, all);
+      const { unplaced } = await store.addAndPlace(rows, all, closures);
       await check();
       if (unplaced.length) $('board-status').append(' It’s saved and listed above the board, so you can make room for it there.');
     } catch (err) {

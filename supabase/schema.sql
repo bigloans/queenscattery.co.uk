@@ -28,3 +28,20 @@ create policy "Owner only" on public.bookings
   for all to authenticated
   using ((auth.jwt() ->> 'email') = 'OWNER_EMAIL')
   with check ((auth.jwt() ->> 'email') = 'OWNER_EMAIL');
+
+-- Closures, added later. Run this part on its own if the bookings table already exists.
+
+create table public.closures (
+  id uuid primary key default gen_random_uuid(),
+  closed_from date not null,
+  reopens date not null check (reopens > closed_from),
+  note text not null default '',
+  created_at timestamptz not null default now()
+);
+
+alter table public.closures enable row level security;
+
+create policy "Owner only" on public.closures
+  for all to authenticated
+  using ((auth.jwt() ->> 'email') = 'OWNER_EMAIL')
+  with check ((auth.jwt() ->> 'email') = 'OWNER_EMAIL');

@@ -6,6 +6,7 @@ import { plan } from './planner.js';
 export const demo = !SUPABASE_URL || !SUPABASE_KEY;
 
 const LOCAL = 'qc-demo-bookings';
+const LOCAL_CLOSURES = 'qc-demo-closures';
 let client;
 
 const db = async () => {
@@ -16,20 +17,22 @@ const db = async () => {
   return client;
 };
 
-const local = {
+const browserList = key => ({
   read() {
     try {
-      return JSON.parse(localStorage.getItem(LOCAL)) || [];
+      return JSON.parse(localStorage.getItem(key)) || [];
     } catch {
       return [];
     }
   },
   write(list) {
     try {
-      localStorage.setItem(LOCAL, JSON.stringify(list));
+      localStorage.setItem(key, JSON.stringify(list));
     } catch {}
   }
-};
+});
+const local = browserList(LOCAL);
+const localClosures = browserList(LOCAL_CLOSURES);
 
 export async function signedIn() {
   if (demo) return true;
@@ -76,6 +79,30 @@ export async function remove(id) {
   if (error) throw error;
 }
 
+// Closures, as {id, closed_from, reopens, note}. The cattery is shut from the night of
+// closed_from up to the day it reopens.
+
+export async function loadClosures() {
+  if (demo) return localClosures.read();
+  const { data, error } = await (await db()).from('closures').select('*').order('closed_from');
+  if (error) throw error;
+  return data;
+}
+
+export async function saveClosure(c) {
+  if (demo) return localClosures.write(localClosures.read().filter(x => x.id !== c.id).concat(c));
+  const { error } = await (await db()).from('closures').upsert(c);
+  if (error) throw error;
+}
+
+export async function removeClosure(id) {
+  if (demo) return localClosures.write(localClosures.read().filter(x => x.id !== id));
+  const { error } = await (await db()).from('closures').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export const closedNights = list => list.map(c => ({ from: c.closed_from, to: c.reopens, note: c.note }));
+
 export const blank = fields => ({
   id: crypto.randomUUID(),
   source: null,
@@ -101,10 +128,11 @@ export const blank = fields => ({
 // Add bookings and give them kennels. Others only move if that's the only way to fit them.
 // Returns the saved rows, the ids that moved, and the ids that didn't fit.
 
-export async function addAndPlace(rows, all) {
+export async function addAndPlace(rows, all, closures) {
   all ??= await load();
+  closures ??= await loadClosures().catch(() => []);
   const list = [...all, ...rows];
-  const res = plan(list);
+  const res = plan(list, { closures: closedNights(closures) });
   const added = new Set(rows.map(r => r.id));
   const out = list
     .filter(b => added.has(b.id) || res.changed.includes(b.id))
@@ -113,6 +141,7 @@ export async function addAndPlace(rows, all) {
   return {
     rows: out,
     moved: res.changed.filter(id => !added.has(id)),
-    unplaced: res.unplaced.filter(id => added.has(id))
+    unplaced: res.unplaced.filter(id => added.has(id)),
+    holding: res.holding.filter(id => added.has(id) || res.changed.includes(id))
   };
 }

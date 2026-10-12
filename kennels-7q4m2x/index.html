@@ -121,6 +121,12 @@
   .band.month { height: 0; border-top: 2px solid var(--green); opacity: .5; }
   .band.today { height: 0; border-top: 2px solid var(--accent); z-index: 6; }
 
+  .lane.hold { background-color: rgba(217, 98, 43, .05); background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgba(217, 98, 43, .07) 6px 8px); }
+  .kh.hold { font-size: .8rem; color: var(--accent); }
+  .closure { position: absolute; left: 0; right: 0; z-index: 3; pointer-events: none; background: repeating-linear-gradient(135deg, rgba(47, 74, 52, .16) 0 10px, rgba(47, 74, 52, .08) 10px 20px); border-top: 2px solid var(--green); border-bottom: 2px solid var(--green); }
+  .closure span { position: sticky; top: calc(var(--head-h) + 8px); display: inline-block; margin: 8px 0 0 12px; padding: 2px 10px; border-radius: 999px; background: var(--green); color: #fff; font-size: .78rem; font-weight: 600; }
+  .date.closed { background: #e4e9e0; color: var(--green-deep); }
+  .card.held { background: repeating-linear-gradient(135deg, var(--c) 0 6px, #fbe3d6 6px 10px); border-color: var(--accent); }
   .card { position: absolute; z-index: 4; padding: 3px 6px; border-radius: 7px; border: 1px solid rgba(0, 0, 0, .14); background: var(--c, #dfe8d8); overflow: hidden; cursor: grab; font-size: .76rem; line-height: 1.25; user-select: none; -webkit-user-select: none; touch-action: auto; }
   .card b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .card span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: rgba(31, 36, 32, .75); }
@@ -149,6 +155,11 @@
   .where .warn { color: var(--accent); font-weight: 500; }
   .contact { margin: 0; }
   .contact a { color: var(--green); }
+  .muted { color: var(--muted); font-size: .88rem; margin: 0; }
+  .closure-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .closure-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--cream); border-radius: 10px; padding: 8px 10px; font-size: .9rem; }
+  .closure-list small { color: var(--muted); }
+  #closure-add { justify-self: start; }
   .section-label { font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-top: 4px; }
 
   .toast { position: fixed; z-index: 50; left: 50%; bottom: 20px; transform: translateX(-50%); max-width: calc(100% - 32px); background: var(--ink); color: #fff; border-radius: 12px; padding: 10px 14px; display: flex; gap: 12px; align-items: center; box-shadow: var(--shadow); font-size: .9rem; }
@@ -163,6 +174,7 @@
     .search input { width: 100%; }
     .results { left: 0; right: 0; width: auto; }
     .btn .wide { display: none; }
+    .bar-actions { flex-wrap: wrap; }
     .date { padding: 0 6px; font-size: .72rem; }
     .date .free { display: none; }
     .card { font-size: .68rem; padding: 2px 4px; }
@@ -199,6 +211,8 @@
     <div class="bar-actions">
       <button class="btn primary" id="add">+ <span class="wide">Add booking</span></button>
       <button class="btn" id="optimise">Optimise</button>
+      <button class="btn" id="closures">Closures</button>
+      <button class="btn" id="holding" aria-pressed="false">Holding pens</button>
       <button class="btn" id="signout">Sign out</button>
     </div>
   </header>
@@ -246,6 +260,24 @@
     <button class="btn" id="cancel" type="button">Cancel</button>
     <button class="btn primary" id="save" type="button">Save</button>
   </footer>
+</aside>
+
+<aside class="panel" id="closures-panel" hidden aria-labelledby="closures-title">
+  <header>
+    <h2 id="closures-title">Closures</h2>
+    <button class="btn icon" id="closures-close" aria-label="Close">✕</button>
+  </header>
+  <form id="closure-form" novalidate>
+    <p class="muted">No cats stay from the first closed night until the day you reopen. Cats can be dropped off on the day you reopen.</p>
+    <div class="row2">
+      <label class="field"><span>First night closed</span><input name="closed_from" type="date" required></label>
+      <label class="field"><span>Open again</span><input name="reopens" type="date" required></label>
+    </div>
+    <label class="field"><span>Note</span><input name="note" placeholder="e.g. Annual leave"></label>
+    <button class="btn primary" id="closure-add" type="button">Add closure</button>
+    <div class="section-label">Coming up</div>
+    <ul class="closure-list" id="closure-list"></ul>
+  </form>
 </aside>
 
 <div class="toast" id="toast" role="status" hidden></div>
