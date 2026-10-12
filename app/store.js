@@ -49,11 +49,19 @@ export async function signOut() {
   if (!demo) await (await db()).auth.signOut();
 }
 
+// Columns added after launch. Until the SQL for them has run, saves leave them out.
+
+const LATER = ['arrive_time', 'depart_time', 'deposit_paid', 'bill_paid'];
+export let hasLaterColumns = true;
+
 export async function load() {
   if (demo) return local.read();
-  const { data, error } = await (await db()).from('bookings').select('*').order('arrive');
+  const client = await db();
+  const probe = await client.from('bookings').select(LATER.join(',')).limit(1);
+  hasLaterColumns = !probe.error;
+  const { data, error } = await client.from('bookings').select('*').order('arrive');
   if (error) throw error;
-  return data;
+  return data.map(b => ({ arrive_time: '', depart_time: '', deposit_paid: false, bill_paid: false, ...b }));
 }
 
 export async function save(rows) {
@@ -69,6 +77,7 @@ export async function save(rows) {
     local.write(all);
     return;
   }
+  if (!hasLaterColumns) rows = rows.map(r => Object.fromEntries(Object.entries(r).filter(([k]) => !LATER.includes(k))));
   const { error } = await (await db()).from('bookings').upsert(rows);
   if (error) throw error;
 }
@@ -115,6 +124,10 @@ export const blank = fields => ({
   joined: false,
   arrive: '',
   depart: '',
+  arrive_time: '',
+  depart_time: '',
+  deposit_paid: false,
+  bill_paid: false,
   diet: '',
   meds: '',
   notes: '',

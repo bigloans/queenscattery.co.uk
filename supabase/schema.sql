@@ -45,3 +45,11 @@ create policy "Owner only" on public.closures
   for all to authenticated
   using ((auth.jwt() ->> 'email') = 'OWNER_EMAIL')
   with check ((auth.jwt() ->> 'email') = 'OWNER_EMAIL');
+
+-- Times and payments, added later
+
+alter table public.bookings
+  add column arrive_time text not null default '',
+  add column depart_time text not null default '',
+  add column deposit_paid boolean not null default false,
+  add column bill_paid boolean not null default false;

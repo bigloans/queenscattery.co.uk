@@ -1,11 +1,16 @@
 // Kennel planner shared by the board and the reply page.
 //
-// A booking needs `kennels` units. Each unit is a list of segments {k, from, to} covering
-// every night from arrival to departure. A unit starts and ends in the same kennel, and may
-// move out to one other kennel and back in the middle of the stay.
+// The planner works in half-days. Slot 2n is the morning of day n, and slot 2n + 1 is its
+// afternoon and the night after. A booking runs from its arrival slot up to its departure
+// slot. With no times given, cats arrive in the afternoon and leave in the morning, so a
+// kennel can turn round on the day one booking leaves and the next arrives.
 //
-// Nights run from the arrival date up to the night before departure, so one booking can
-// leave a kennel on the day the next one arrives.
+// A booking needs `kennels` units. Each unit is a list of segments {k, from, to} covering
+// the whole stay. A unit starts and ends in the same kennel. A unit with one cat may move
+// out to one other kennel and back in the middle of the stay, always on a morning.
+//
+// The planner only ever chooses kennels. It never changes a booking's dates, times, cats or
+// number of kennels.
 //
 // Holding pens 16 to 23 are a last resort. A cat only goes in one for at most two nights,
 // either for a whole short stay or while it moves out of its kennel mid-stay. Closures block
@@ -29,11 +34,32 @@ export const todayIso = () => {
   return isoDay(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5);
 };
 
+// Times are '', 'am', 'pm' or 'HH:MM'. Only morning or afternoon matters for planning.
+
+export const isAfternoon = time => time === 'pm' || (/^\d\d:\d\d$/.test(time ?? '') && time >= '12:00');
+export const isMorning = time => time === 'am' || (/^\d\d:\d\d$/.test(time ?? '') && time < '12:00');
+export const arriveSlot = b => 2 * dayNum(b.arrive) + (isMorning(b.arrive_time) ? 0 : 1);
+export const departSlot = b => 2 * dayNum(b.depart) + (isAfternoon(b.depart_time) ? 1 : 0);
+
+// Each unit's segments as slots. The first and last follow the booking's times; moves in
+// between happen on a morning.
+
+export function unitSlots(b, placement = b.placement) {
+  const A = arriveSlot(b);
+  const D = departSlot(b);
+  return placement?.map(u => u.map((s, i) => ({
+    k: s.k,
+    a: i === 0 ? A : 2 * dayNum(s.from),
+    d: i === u.length - 1 ? D : 2 * dayNum(s.to)
+  })));
+}
+
 // Fitting a booking beats a night in a holding pen, a holding pen beats any other move, a
 // move beats an unjoined pen, and an unjoined pen beats short gaps between bookings. Short
 // gaps are hard to fill, so each night in one costs more than a night in a longer gap, and
 // gaps of three weeks or more cost nothing. An owner's kennels sit side by side even when
 // they aren't joined, and kennel 15 is kept for bookings that need its extra space.
+// Costs are per night, so per-slot costs are halved.
 
 const COST = { unplaced: 1e6, holding: 3000, move: 1000, unjoined: 15, apart: 2, big: 3, gap: 3, halfPair: 0.2 };
 
@@ -41,7 +67,10 @@ const COST = { unplaced: 1e6, holding: 3000, move: 1000, unjoined: 15, apart: 2,
 // preference but less than a mid-stay move, so others only move to make room.
 
 const CHANGED = { insert: 500, optimise: 3 };
-const gapCost = g => COST.gap * g * Math.max(0, 1 - g / 21);
+const gapCost = slots => {
+  const g = slots / 2;
+  return COST.gap * g * Math.max(0, 1 - g / 21);
+};
 
 const ALL = Array.from({ length: KENNELS }, (_, i) => i + 1);
 
@@ -49,6 +78,10 @@ const ALL = Array.from({ length: KENNELS }, (_, i) => i + 1);
 
 const allows15 = it => it.joined && it.kennels === 2 && it.cats <= 3;
 const singleKennels = it => (it.cats > 2 ? [15] : ALL);
+
+// Cats in unit i. Extra cats share kennels from the first unit on, so later units hold one.
+
+const catsIn = (it, i) => (it.kennels === 1 ? it.cats : 1 + (i < it.cats - it.kennels ? 1 : 0));
 
 class Grid {
   constructor(start, end, T) {
@@ -75,15 +108,14 @@ class Grid {
 
 // Placement conversion
 
-const toDays = placement => placement?.map(u => u.map(s => ({ k: s.k, a: dayNum(s.from), d: dayNum(s.to) })));
-const toIso = units => units?.map(u => u.map(s => ({ k: s.k, from: isoDay(s.a), to: isoDay(s.d) })));
+const toIso = units => units?.map(u => u.map(s => ({ k: s.k, from: isoDay(Math.floor(s.a / 2)), to: isoDay(Math.floor(s.d / 2)) })));
 const keyOf = units => (units ? JSON.stringify(units.map(u => u.map(s => [s.k, s.a, s.d])).sort()) : '');
 
 const validUnits = (it, units) => {
   if (!Array.isArray(units) || !units.length) return false;
   const single15 = units.length === 1 && allows15(it) && units[0].every(s => s.k === 15);
   if (units.length !== it.kennels && !single15) return false;
-  return units.every(u => u.length && u[0].a === it.a && u.at(-1).d === it.d && u[0].k === u.at(-1).k
+  return units.every(u => u.length && u[0].k === u.at(-1).k
     && u.every((s, i) => s.k >= 1 && s.k <= LANES && s.a < s.d && (!i || s.a === u[i - 1].d)));
 };
 
@@ -91,18 +123,18 @@ const kennelOn = (unit, t) => unit.find(s => s.a <= t && t < s.d)?.k;
 
 function prepare(bookings, T) {
   return bookings.map((b, i) => {
-    const it = { id: b.id, v: i + 1, a: dayNum(b.arrive), d: dayNum(b.depart), cats: +b.cats || 1, kennels: +b.kennels || 1, joined: !!b.joined };
-    const units = toDays(b.placement);
+    const it = { id: b.id, v: i + 1, a: arriveSlot(b), d: departSlot(b), cats: +b.cats || 1, kennels: +b.kennels || 1, joined: !!b.joined };
+    const units = unitSlots(b);
     it.units = validUnits(it, units) ? units : null;
     it.orig = keyOf(it.units);
-    it.fixed = !!it.units && (!!b.locked || it.a <= T);
+    it.fixed = !!it.units && (!!b.locked || dayNum(b.arrive) <= T / 2);
     return it;
   });
 }
 
 // Scoring
 
-// Nights where a multi-kennel booking has fewer pairs than it could
+// Slots where a multi-kennel booking has fewer pairs than it could
 
 function unjoined(it, T) {
   if (it.kennels < 2 || it.units.length === 1) return 0;
@@ -117,13 +149,13 @@ function unjoined(it, T) {
 }
 
 function bookingCost(it, T) {
-  let c = (it.joined ? COST.unjoined : COST.apart) * it.miss;
+  let c = (it.joined ? COST.unjoined : COST.apart) * it.miss / 2;
   const needs15 = it.units.length === 1 && it.cats > 2;
   for (const u of it.units) {
     if (u.length > 1) c += COST.move;
     for (const s of u) {
-      if (isHolding(s.k)) c += COST.holding * (s.d - s.a);
-      else if (s.k === 15 && !needs15) c += COST.big * (s.d - Math.max(s.a, T));
+      if (isHolding(s.k)) c += COST.holding * (s.d - s.a) / 2;
+      else if (s.k === 15 && !needs15) c += COST.big * Math.max(0, s.d - Math.max(s.a, T)) / 2;
     }
   }
   return c;
@@ -142,7 +174,7 @@ function segDelta(g, T, { k, a, d }) {
   const open = n >= g.e;
   let cost = gapCost(lo - prevEnd) + (open ? 0 : gapCost(n - d) - gapCost(n - prevEnd));
   const m = mateOf(k);
-  if (m) for (let t = lo; t < d; t++) cost += g.at(m, t) ? -COST.halfPair : COST.halfPair;
+  if (m) for (let t = lo; t < d; t++) cost += (g.at(m, t) ? -COST.halfPair : COST.halfPair) / 2;
   return cost;
 }
 
@@ -166,7 +198,7 @@ function totalCost(g, items, T, wChanged) {
     }
   }
   for (const [p, q] of PAIRS) {
-    for (let t = Math.max(T, g.s); t < g.e; t++) if (!g.at(p, t) !== !g.at(q, t)) c += COST.halfPair;
+    for (let t = Math.max(T, g.s); t < g.e; t++) if (!g.at(p, t) !== !g.at(q, t)) c += COST.halfPair / 2;
   }
   return c;
 }
@@ -200,15 +232,17 @@ function tryPlace(g, it, units, T, wChanged) {
   return score;
 }
 
-// Ways to place one unit. Moves and holding pens are only offered when the unit can't stay
-// in one kennel. Holding pens take up to 2 cats, so a unit that needs kennel 15 can't use them.
+// Ways to place one unit with `cats` cats in it. Moves and holding pens are only offered when
+// the unit can't stay in one kennel. Only a lone cat moves mid-stay. Holding pens take up to
+// 2 cats, so a unit that needs kennel 15 can't use them.
 
-function unitOptions(g, a, d, ks, allowMove) {
+function unitOptions(g, a, d, ks, allowMove, cats) {
   const out = [];
   for (const k of ks) if (g.free(k, a, d)) out.push([{ k, a, d }]);
   if (out.length || !allowMove) return out;
-  const holds = ks.length > 1 ? HOLDING : [];
-  if (d - a <= HOLD_NIGHTS) for (const h of holds) if (g.free(h, a, d)) out.push([{ k: h, a, d }]);
+  const holds = cats <= 2 ? HOLDING : [];
+  if (Math.floor(d / 2) - Math.floor(a / 2) <= HOLD_NIGHTS) for (const h of holds) if (g.free(h, a, d)) out.push([{ k: h, a, d }]);
+  if (cats > 1) return out;
   for (const k of ks) {
     if (g.at(k, a) || g.at(k, d - 1)) continue;
     let x = -1;
@@ -220,7 +254,10 @@ function unitOptions(g, a, d, ks, allowMove) {
       }
     }
     if (x < 0) continue;
-    const away = y - x <= HOLD_NIGHTS ? ks.concat(holds) : ks;
+    x -= x % 2;
+    y += y % 2;
+    if (x <= a || y >= d) continue;
+    const away = (y - x) / 2 <= HOLD_NIGHTS ? ks.concat(holds) : ks;
     for (const k2 of away) {
       if (k2 !== k && g.free(k2, x, y)) out.push([{ k, a, d: x }, { k: k2, a: x, d: y }, { k, a: y, d }]);
     }
@@ -242,7 +279,7 @@ function extend(g, it, units, need, T, allowMove) {
   for (let i = 0; i < need && ok; i++) {
     let best = null;
     let bestScore = Infinity;
-    for (const u of unitOptions(g, it.a, it.d, ALL, allowMove)) {
+    for (const u of unitOptions(g, it.a, it.d, ALL, allowMove, catsIn(it, out.length))) {
       const s = unitScore(g, T, u);
       if (s < bestScore) {
         bestScore = s;
@@ -273,16 +310,14 @@ function bestPlacement(g, it, T, wChanged, allowMove) {
   };
 
   if (it.kennels === 1) {
-    for (const u of unitOptions(g, a, d, singleKennels(it), allowMove)) consider([u]);
+    for (const u of unitOptions(g, a, d, singleKennels(it), allowMove, it.cats)) consider([u]);
     return best;
   }
   if (allows15(it) && g.free(15, a, d)) consider([[{ k: 15, a, d }]]);
-  if (it.kennels >= 2) {
-    for (const [p, q] of PAIRS) {
-      if (g.free(p, a, d) && g.free(q, a, d)) consider(extend(g, it, [[{ k: p, a, d }], [{ k: q, a, d }]], it.kennels - 2, T, false));
-    }
+  for (const [p, q] of PAIRS) {
+    if (g.free(p, a, d) && g.free(q, a, d)) consider(extend(g, it, [[{ k: p, a, d }], [{ k: q, a, d }]], it.kennels - 2, T, false));
   }
-  for (const first of unitOptions(g, a, d, ALL, allowMove)) consider(extend(g, it, [first], it.kennels - 1, T, allowMove));
+  for (const first of unitOptions(g, a, d, ALL, allowMove, catsIn(it, 0))) consider(extend(g, it, [first], it.kennels - 1, T, allowMove));
   return best;
 }
 
@@ -335,7 +370,7 @@ function improve(g, items, T, wChanged, ms) {
       }
       if (!ok) continue;
     } else {
-      const near = movable.filter(it => it !== seed && it.a < seed.d + 2 && it.d > seed.a - 2);
+      const near = movable.filter(it => it !== seed && it.a < seed.d + 4 && it.d > seed.a - 4);
       const size = 1 + Math.floor(rand() * 6);
       while (group.size < size && near.length) group.add(near.splice(Math.floor(rand() * near.length), 1)[0]);
     }
@@ -373,19 +408,19 @@ function improve(g, items, T, wChanged, ms) {
 // mode 'optimise' rearranges every booking that hasn't started and isn't locked.
 
 export function plan(bookings, { today = todayIso(), mode = 'insert', ms, closures = [] } = {}) {
-  const T = dayNum(today);
+  const T = 2 * dayNum(today);
   const items = prepare(bookings, T);
   if (!items.length) return { placements: {}, changed: [], unplaced: [], clashes: [], moves: [], holding: [] };
 
   const start = Math.min(T, ...items.map(it => it.a));
-  const end = Math.max(T + 1, ...items.map(it => it.d)) + 1;
+  const end = Math.max(T + 2, ...items.map(it => it.d)) + 2;
   const g = new Grid(start, end, T);
   const clashes = new Set();
   const wChanged = CHANGED[mode];
 
   for (const c of closures) {
-    const a = Math.max(dayNum(c.from), start);
-    const d = Math.min(dayNum(c.to), end);
+    const a = Math.max(2 * dayNum(c.from) + 1, start);
+    const d = Math.min(2 * dayNum(c.to), end);
     if (a < d) for (let k = 1; k <= LANES; k++) g.set(k, a, d, CLOSED);
   }
 
@@ -431,18 +466,16 @@ export function plan(bookings, { today = todayIso(), mode = 'insert', ms, closur
   };
 }
 
-// Overlap check for hand moves on the board. Returns the ids of bookings in the way.
+// Overlap check for hand moves on the board. `b` would take `placement`; returns the ids of
+// bookings in the way, using arrival and departure times.
 
-export function blockers(bookings, id, units) {
+export function blockers(bookings, b, placement) {
+  const mine = unitSlots(b, placement).flat();
   const out = new Set();
-  for (const b of bookings) {
-    if (b.id === id || !b.placement) continue;
-    for (const u of b.placement) {
-      for (const s of u) {
-        for (const nu of units) {
-          for (const ns of nu) if (ns.k === s.k && ns.from < s.to && s.from < ns.to) out.add(b.id);
-        }
-      }
+  for (const o of bookings) {
+    if (o.id === b.id || !o.placement) continue;
+    for (const s of unitSlots(o).flat()) {
+      if (mine.some(m => m.k === s.k && m.a < s.d && s.a < m.d)) out.add(o.id);
     }
   }
   return [...out];

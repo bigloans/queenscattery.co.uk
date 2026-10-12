@@ -1,10 +1,14 @@
-import { KENNELS, LANES, HOLDING, PAIRS, isHolding, mateOf, dayNum, isoDay, todayIso, plan, blockers } from '../app/planner.js';
+import {
+  KENNELS, LANES, HOLDING, PAIRS, isHolding, mateOf, dayNum, isoDay, todayIso, plan, blockers,
+  unitSlots, arriveSlot, departSlot
+} from '../app/planner.js';
 import * as store from '../app/store.js';
 
 const $ = id => document.getElementById(id);
 const TODAY = todayIso();
 const T = dayNum(TODAY);
 const PALETTE = ['#dfe8d8', '#f3dfc9', '#d9e6ee', '#efd9df', '#e6e0f0', '#f2ecc6', '#d6ebe4', '#eadfd3'];
+const HOLD_MAX = 2;
 
 let bookings = [];
 let closures = [];
@@ -18,6 +22,7 @@ let openId = null;
 let start = T;
 let end = T + 1;
 let freeEls = [];
+let ticketDay = T;
 
 const byId = id => bookings.find(b => b.id === id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
@@ -42,23 +47,53 @@ const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(
 
 const kname = k => (isHolding(k) ? `holding pen ${k - KENNELS}` : `kennel ${k}`);
 const kshort = k => (isHolding(k) ? `H${k - KENNELS}` : `${k}`);
+const cap = s => s[0].toUpperCase() + s.slice(1);
 const planOpts = extra => ({ closures: store.closedNights(closures), ...extra });
 const closureOn = n => closures.find(c => dayNum(c.closed_from) <= n && n < dayNum(c.reopens));
 const closureDuring = b => closures.find(c => c.closed_from < b.depart && b.arrive < c.reopens);
-const holdNights = p => p ? p.flat().filter(s => isHolding(s.k)) : [];
-
-// Holding pens show when asked for, or whenever an upcoming booking uses one
-
-const usesHolding = () => bookings.some(b => b.depart > TODAY && holdNights(placementOf(b)).length);
+const holdNights = p => (p ? p.flat().filter(s => isHolding(s.k)) : []);
 
 const allows15 = b => b.joined && +b.kennels === 2 && +b.cats <= 3;
 const seg = (k, b) => ({ k, from: b.arrive, to: b.depart });
 const placementOf = b => (preview ? preview.placements[b.id] : b.placement);
 const isPair = p => p?.length === 2 && p.every(u => u.length === 1) && mateOf(p[0][0].k) === p[1][0].k;
 
+// Cats in unit i, matching the planner. Extra cats share kennels from the first unit on.
+
+const unitCats = (b, i, p = b.placement) => (p.length === 1 ? +b.cats : 1 + (i < +b.cats - +b.kennels ? 1 : 0));
+
+// Holding pens show when asked for, or whenever an upcoming booking uses one
+
+const usesHolding = () => bookings.some(b => b.depart > TODAY && holdNights(placementOf(b)).length);
+
+// Times
+
+const timeText = t => (t === 'am' ? 'Morning' : t === 'pm' ? 'Afternoon' : t || '');
+const minutes = t => +t.slice(0, 2) * 60 + +t.slice(3, 5);
+
+// Where in a day row a stay starts or ends, as a fraction of the row. Without a time, a stay
+// fills the whole day, unless another booking turns the kennel round that day.
+
+function arriveFrac(t, other) {
+  if (t === 'am') return 0;
+  if (t === 'pm') return 0.5;
+  if (t) return minutes(t) / 1440;
+  return other ? departFrac(other.depart_time) ?? 0.5 : 0;
+}
+
+function departFrac(t, other) {
+  if (t === 'am') return 0.5;
+  if (t === 'pm') return 1;
+  if (t) return minutes(t) / 1440;
+  if (other === undefined) return null;
+  return other ? arriveFrac(other.arrive_time) || 0.5 : 1;
+}
+
+const MOVE_FRAC = 0.375;
+
 // Layout
 
-const L = { row: 28, dateW: 128, colW: 60, holdW: 44, gap: 8, mobile: false };
+const L = { row: 30, dateW: 128, colW: 60, holdW: 44, gap: 8, mobile: false };
 const HOLD_SHARE = 0.7;
 
 function measure() {
@@ -81,6 +116,7 @@ const laneX = k => (isHolding(k)
   ? laneX(KENNELS) + L.colW + 3 * L.gap + (k - KENNELS - 1) * L.holdW
   : (k - 1) * L.colW + Math.floor((k - 1) / 2) * L.gap);
 const lanesWidth = () => laneX(lastLane()) + laneW(lastLane());
+const rowTop = n => (n - start) * L.row;
 
 function kennelAtX(x) {
   let best = 1;
@@ -98,8 +134,7 @@ function describe(b, p = placementOf(b)) {
     if (u.length === 1) return kname(u[0].k);
     return `${kname(u[0].k)}, moving to ${kname(u[1].k)} on ${niceDate(u[1].from)} and back on ${niceDate(u[1].to)}`;
   });
-  const text = parts.join('; ');
-  return text[0].toUpperCase() + text.slice(1);
+  return cap(parts.join('; '));
 }
 
 // Static parts: kennel headers, date column, month picker
@@ -148,20 +183,51 @@ function buildStatic() {
   for (let m = start; m < end; m = addMonths(m, 1)) month.add(new Option(fmt(m, { month: 'long', year: 'numeric' }), m));
 }
 
+// Turnarounds: in each lane, who leaves and who arrives on each day
+
+function turnarounds() {
+  const out = new Map();
+  const note = (k, day, field, b) => {
+    const key = `${k}:${day}`;
+    if (!out.has(key)) out.set(key, {});
+    out.get(key)[field] = b;
+  };
+  for (const b of bookings) {
+    const p = placementOf(b);
+    if (!p) continue;
+    for (const u of p) {
+      note(u[0].k, b.arrive, 'arrive', b);
+      note(u.at(-1).k, b.depart, 'depart', b);
+    }
+  }
+  return out;
+}
+
 // Cards
 
-function piecesOf(b, p) {
-  const a = dayNum(b.arrive);
-  const d = dayNum(b.depart);
-  if (isPair(p)) return [{ ks: [p[0][0].k, p[1][0].k], a, d, part: 'pair', unit: 0 }];
+function piecesOf(b, p, turns) {
+  if (isPair(p)) return [{ ks: [p[0][0].k, p[1][0].k], segs: [p[0][0]], u: p[0], part: 'pair', unit: 0 }];
   const out = [];
   p.forEach((u, unit) => {
+    const pairLike = p.length === 1 && u[0].k === 15 && +b.kennels === 2;
     if (u.length === 1) {
-      out.push({ ks: [u[0].k], a, d, part: p.length === 1 && u[0].k === 15 && +b.kennels === 2 ? 'pair' : 'whole', unit });
+      out.push({ ks: [u[0].k], segs: [u[0]], u, part: pairLike ? 'pair' : 'whole', unit });
       return;
     }
-    u.forEach((s, i) => out.push({ ks: [s.k], a: dayNum(s.from), d: dayNum(s.to), part: i === 1 ? 'away' : 'home', unit, home: u[0].k, away: u[1].k, back: u[1].to }));
+    u.forEach((s, i) => out.push({ ks: [s.k], segs: [s], u, i, part: i === 1 ? 'away' : 'home', unit, home: u[0].k, away: u[1].k, back: u[1].to }));
   });
+  for (const piece of out) {
+    const s = piece.segs[0];
+    const k = piece.ks[0];
+    const first = s === piece.u[0];
+    const last = s === piece.u.at(-1);
+    const turnIn = turns.get(`${k}:${b.arrive}`)?.depart;
+    const turnOut = turns.get(`${k}:${b.depart}`)?.arrive;
+    piece.top = first ? rowTop(dayNum(b.arrive)) + arriveFrac(b.arrive_time, turnIn && turnIn !== b ? turnIn : null) * L.row
+      : rowTop(dayNum(s.from)) + MOVE_FRAC * L.row;
+    piece.bottom = last ? rowTop(dayNum(b.depart)) + departFrac(b.depart_time, turnOut && turnOut !== b ? turnOut : null) * L.row
+      : rowTop(dayNum(s.to)) + MOVE_FRAC * L.row;
+  }
   return out;
 }
 
@@ -176,12 +242,11 @@ function cardHtml(b, piece, key) {
   const hi = Math.max(...piece.ks);
   const left = laneX(lo) + 2;
   const width = laneX(hi) + laneW(hi) - laneX(lo) - 4;
-  const top = (piece.a - start) * L.row + 1;
-  const height = (piece.d - piece.a) * L.row - 2;
-  const rows = piece.d - piece.a;
+  const top = piece.top + 1;
+  const height = Math.max(10, piece.bottom - piece.top - 2);
+  const rows = height / L.row;
   const name = b.name || 'No name';
-  const cats = b.cat_names || plural(+b.cats, 'cat');
-  const p = placementOf(b);
+  const cats = b.cat_names && b.cat_names !== b.name ? b.cat_names : plural(+b.cats, 'cat');
   const classes = ['card'];
   if (piece.part === 'away') classes.push('away');
   if (isHolding(lo)) classes.push('held');
@@ -191,16 +256,18 @@ function cardHtml(b, piece, key) {
 
   let lines = `<b>${esc(name)}</b>`;
   if (piece.part === 'away') {
-    lines = `<b>↪ ${esc(name)}</b>${rows > 1 ? `<span>Back to ${kshort(piece.home)} ${esc(shortDate(dayNum(piece.back)))}</span>` : ''}`;
+    lines = `<b>↪ ${esc(name)}</b>${rows > 1.5 ? `<span>Back to ${kshort(piece.home)} ${esc(shortDate(dayNum(piece.back)))}</span>` : ''}`;
   } else {
-    if (rows > 1) lines += `<span>${esc(cats)}</span>`;
-    if (rows > 2) {
-      lines += piece.d < dayNum(b.depart)
-        ? `<span>To ${kshort(piece.away)} ${esc(shortDate(piece.d))}</span>`
-        : `<span>Leaves ${esc(shortDate(piece.d))}</span>`;
+    if (rows > 1.5) lines += `<span>${esc(cats)}</span>`;
+    if (rows > 2.5) {
+      const s = piece.segs[0];
+      const leaves = s === piece.u.at(-1);
+      lines += leaves
+        ? `<span>Leaves ${esc(shortDate(dayNum(b.depart)))}${b.depart_time ? ` ${esc(timeText(b.depart_time).toLowerCase())}` : ''}</span>`
+        : `<span>To ${kshort(piece.away)} ${esc(shortDate(dayNum(s.to)))}</span>`;
     }
   }
-  const title = `${name} · ${cats} · ${niceDate(b.arrive)} to ${niceDate(b.depart)} · ${describe(b)}`;
+  const title = `${name} · ${cats} · ${niceDate(b.arrive)}${b.arrive_time ? ` ${timeText(b.arrive_time).toLowerCase()}` : ''} to ${niceDate(b.depart)}${b.depart_time ? ` ${timeText(b.depart_time).toLowerCase()}` : ''} · ${describe(b)}`;
   return `<div class="${classes.join(' ')}" tabindex="0" role="button" data-key="${key}" title="${esc(title)}"
     style="left:${left}px;width:${width}px;top:${top}px;height:${height}px;--c:${colourOf(b.id)}">${lines}</div>`;
 }
@@ -211,54 +278,63 @@ function render() {
   lanes.style.width = `${lanesWidth()}px`;
   lanes.style.height = `${days * L.row}px`;
 
-  // Occupancy, free counts and clashes
+  // Clashes, using arrival and departure times, and free kennels each night
 
-  const occ = Array.from({ length: days }, () => new Map());
   clashes = new Set();
+  const byLane = new Map();
+  const nightUse = Array.from({ length: days }, () => new Set());
   for (const b of bookings) {
     const p = placementOf(b);
     if (!p) continue;
-    for (const u of p) {
-      for (const s of u) {
-        for (let t = Math.max(dayNum(s.from), start); t < Math.min(dayNum(s.to), end); t++) {
-          const cell = occ[t - start];
-          const other = cell.get(s.k);
-          if (other && other !== b.id) clashes.add(other).add(b.id);
-          if (closureOn(t)) clashes.add(b.id);
-          cell.set(s.k, b.id);
-        }
+    for (const s of unitSlots(b, p).flat()) {
+      if (!byLane.has(s.k)) byLane.set(s.k, []);
+      byLane.get(s.k).push({ ...s, id: b.id });
+      for (let t = s.a; t < s.d; t++) {
+        const n = Math.floor(t / 2);
+        if (t % 2 && n >= start && n < end && !isHolding(s.k)) nightUse[n - start].add(s.k);
+        if (t % 2 && closureOn(n)) clashes.add(b.id);
       }
     }
   }
-  occ.forEach((cell, i) => {
+  for (const list of byLane.values()) {
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const x = list[i];
+        const y = list[j];
+        if (x.id !== y.id && x.a < y.d && y.a < x.d) clashes.add(x.id).add(y.id);
+      }
+    }
+  }
+  nightUse.forEach((used, i) => {
     const closed = closureOn(start + i);
-    const free = KENNELS - [...cell.keys()].filter(k => !isHolding(k)).length;
+    const free = KENNELS - used.size;
     freeEls[i].textContent = closed ? 'Closed' : free ? `${free} free` : 'Full';
     freeEls[i].classList.toggle('full', !free && !closed);
   });
 
   let html = '';
   for (let k = 1; k <= lastLane(); k++) html += `<div class="lane${isHolding(k) ? ' hold' : ''}" style="left:${laneX(k)}px;width:${laneW(k)}px"></div>`;
-  for (const c of closures) {
-    const a = Math.max(dayNum(c.closed_from), start);
-    const d = Math.min(dayNum(c.reopens), end);
-    if (a >= d) continue;
-    html += `<div class="closure" style="top:${(a - start) * L.row}px;height:${(d - a) * L.row}px"><span>Closed${c.note ? ` · ${esc(c.note)}` : ''}</span></div>`;
-  }
   html += `<div class="band past" style="top:0;height:${(T - start) * L.row}px"></div>`;
   for (let n = start; n < end; n++) {
     const date = new Date(n * 864e5);
     const dow = date.getUTCDay();
-    if (dow === 0 || dow === 6) html += `<div class="band weekend" style="top:${(n - start) * L.row}px"></div>`;
-    if (date.getUTCDate() === 1) html += `<div class="band month" style="top:${(n - start) * L.row}px"></div>`;
+    if (dow === 0 || dow === 6) html += `<div class="band weekend" style="top:${rowTop(n)}px"></div>`;
+    if (date.getUTCDate() === 1) html += `<div class="band month" style="top:${rowTop(n)}px"></div>`;
   }
-  html += `<div class="band today" style="top:${(T - start) * L.row}px"></div>`;
+  html += `<div class="band today" style="top:${rowTop(T)}px;height:${L.row}px"></div>`;
+  for (const c of closures) {
+    const a = Math.max(dayNum(c.closed_from), start);
+    const d = Math.min(dayNum(c.reopens), end);
+    if (a >= d) continue;
+    html += `<div class="closure" style="top:${rowTop(a) + L.row / 2}px;height:${(d - a) * L.row}px"><span>Closed${c.note ? ` · ${esc(c.note)}` : ''}</span></div>`;
+  }
 
+  const turns = turnarounds();
   pieces = new Map();
   for (const b of bookings) {
     const p = placementOf(b);
     if (!p) continue;
-    piecesOf(b, p).forEach((piece, i) => {
+    piecesOf(b, p, turns).forEach((piece, i) => {
       const key = `${b.id}:${i}`;
       pieces.set(key, { b, piece });
       html += cardHtml(b, piece, key);
@@ -266,7 +342,142 @@ function render() {
   }
   lanes.innerHTML = html;
   renderNotices();
+  renderTickets();
 }
+
+// Jobs for the day: arrivals, departures, turnarounds and mid-stay moves
+
+function jobsFor(n) {
+  const iso = isoDay(n);
+  const ins = [];
+  const outs = [];
+  const moves = [];
+  for (const b of bookings) {
+    const p = b.placement;
+    if (b.arrive === iso) ins.push({ b, ks: p ? p.map(u => u[0].k) : [] });
+    if (b.depart === iso) outs.push({ b, ks: p ? p.map(u => u.at(-1).k) : [] });
+    p?.forEach(u => u.forEach((s, i) => {
+      if (i > 0 && s.from === iso) moves.push({ b, from: u[i - 1].k, to: s.k, back: i === 2 });
+    }));
+  }
+
+  const jobs = [];
+  const paired = new Set();
+  for (const o of outs) {
+    for (const i of ins) {
+      const k = o.ks.find(x => i.ks.includes(x));
+      if (k && o.b !== i.b && !paired.has(i)) {
+        jobs.push({ type: 'turn', k, out: o, in: i, key: o.b.depart_time });
+        paired.add(o).add(i);
+        break;
+      }
+    }
+  }
+  for (const o of outs) if (!paired.has(o)) jobs.push({ type: 'out', ev: o, key: o.b.depart_time });
+  for (const i of ins) if (!paired.has(i)) jobs.push({ type: 'in', ev: i, key: i.b.arrive_time });
+  for (const m of moves) jobs.push({ type: 'move', ev: m, key: 'am' });
+
+  const order = t => (t === 'am' ? '09:00' : t === 'pm' ? '14:00' : t || '23:59');
+  return jobs.sort((x, y) => order(x.key).localeCompare(order(y.key)));
+}
+
+function where(ks) {
+  if (!ks.length) return 'No kennel yet';
+  if (ks.length === 2 && mateOf(ks[0]) === ks[1]) return `Kennels ${Math.min(...ks)} and ${Math.max(...ks)}`;
+  return cap(ks.map(kname).join(', '));
+}
+
+function payHtml(b) {
+  return `<div class="pay">
+    <label><input type="checkbox" data-pay="deposit_paid" data-id="${b.id}"${b.deposit_paid ? ' checked' : ''}> Deposit paid</label>
+    <label><input type="checkbox" data-pay="bill_paid" data-id="${b.id}"${b.bill_paid ? ' checked' : ''}> Bill paid</label>
+  </div>`;
+}
+
+function personHtml(b, time, extra = '') {
+  const cats = b.cat_names && b.cat_names !== b.name ? b.cat_names : plural(+b.cats, 'cat');
+  return `<button class="tname" type="button" data-open="${b.id}">${esc(b.name || 'No name')}</button>
+    <small>${esc(cats)}${b.new_customer ? ' · new customer' : ''}${time ? ` · ${esc(time)}` : ''}${extra}</small>`;
+}
+
+function ticketHtml(job) {
+  if (job.type === 'turn') {
+    const { out, in: inn, k } = job;
+    return `<article class="ticket turn">
+      <header><span class="tag">Turnaround</span><span class="where">${esc(cap(kname(k)))}</span></header>
+      <div class="leg"><span class="dir">Out</span>${personHtml(out.b, timeText(out.b.depart_time) || 'Time not set')}${payHtml(out.b)}</div>
+      <div class="leg"><span class="dir">In</span>${personHtml(inn.b, timeText(inn.b.arrive_time) || 'Time not set')}${payHtml(inn.b)}</div>
+    </article>`;
+  }
+  const { b } = job.ev;
+  if (job.type === 'move') {
+    const m = job.ev;
+    return `<article class="ticket move">
+      <header><span class="tag">${m.back ? 'Move back' : 'Move'}</span><span class="where">${esc(cap(kname(m.from)))} → ${esc(kname(m.to))}</span></header>
+      ${personHtml(b, 'Morning')}${payHtml(b)}
+    </article>`;
+  }
+  const isIn = job.type === 'in';
+  const time = timeText(isIn ? b.arrive_time : b.depart_time) || 'Time not set';
+  const extra = isIn ? ` · leaves ${esc(niceDate(b.depart))}` : '';
+  return `<article class="ticket ${job.type}">
+    <header><span class="tag">${isIn ? 'In' : 'Out'}</span><span class="where">${esc(where(job.ev.ks))}</span></header>
+    ${personHtml(b, time, extra)}${payHtml(b)}
+  </article>`;
+}
+
+function renderTickets() {
+  const jobs = jobsFor(ticketDay);
+  const label = ticketDay === T ? 'Today' : ticketDay === T + 1 ? 'Tomorrow' : ticketDay === T - 1 ? 'Yesterday' : '';
+  $('jobs-day').textContent = `${label ? label + ', ' : ''}${niceDate(isoDay(ticketDay))}`;
+  $('jobs-count').textContent = jobs.length ? plural(jobs.length, 'job') : 'Nothing on';
+  $('tickets').innerHTML = jobs.length
+    ? jobs.map(ticketHtml).join('')
+    : `<p class="muted">${closureOn(ticketDay) ? 'Closed.' : 'No cats coming in or going out.'}</p>`;
+}
+
+$('jobs-prev').addEventListener('click', () => {
+  ticketDay--;
+  renderTickets();
+});
+$('jobs-next').addEventListener('click', () => {
+  ticketDay++;
+  renderTickets();
+});
+$('jobs-today').addEventListener('click', () => {
+  ticketDay = T;
+  renderTickets();
+});
+$('jobs-toggle').addEventListener('click', () => {
+  const hidden = $('tickets').hidden = !$('tickets').hidden;
+  $('jobs-toggle').textContent = hidden ? 'Show' : 'Hide';
+  try {
+    localStorage.setItem('qc-jobs-hidden', hidden ? '1' : '');
+  } catch {}
+});
+try {
+  if (localStorage.getItem('qc-jobs-hidden')) {
+    $('tickets').hidden = true;
+    $('jobs-toggle').textContent = 'Show';
+  }
+} catch {}
+
+$('tickets').addEventListener('click', e => {
+  const open = e.target.closest('[data-open]');
+  if (open) focusBooking(open.dataset.open);
+});
+
+$('tickets').addEventListener('change', e => {
+  const box = e.target.closest('[data-pay]');
+  if (!box) return;
+  const b = byId(box.dataset.id);
+  if (!b) return;
+  if (!store.hasLaterColumns) {
+    box.checked = !box.checked;
+    return toast('Payments need one more setup step in Supabase first.');
+  }
+  commit([{ ...b, [box.dataset.pay]: box.checked }], null, { undoable: false });
+});
 
 // Notices above the board
 
@@ -275,8 +486,8 @@ function renderNotices() {
   if (store.demo) {
     out.push(`<div class="notice demo"><span class="grow">Demo mode. Bookings are saved in this browser only until Supabase is connected.</span></div>`);
   }
-  if (closuresMissing) {
-    out.push(`<div class="notice waiting"><span class="grow">Closures need one more setup step in Supabase before they can be saved.</span></div>`);
+  if (closuresMissing || !store.hasLaterColumns) {
+    out.push(`<div class="notice waiting"><span class="grow">${!store.hasLaterColumns ? 'Times and payments' : 'Closures'} need one more setup step in Supabase before they can be saved.</span></div>`);
   }
   if (preview) {
     const { changed, placedNow, midStay, held } = preview;
@@ -474,34 +685,24 @@ async function reload() {
 
 // Moving cards by hand
 
-function selfOverlap(p) {
-  const seen = new Map();
-  for (const u of p) {
-    for (const s of u) {
-      for (let t = dayNum(s.from); t < dayNum(s.to); t++) {
-        const key = `${s.k}:${t}`;
-        if (seen.has(key)) return true;
-        seen.set(key, 1);
-      }
-    }
-  }
-  return false;
+function selfOverlap(b, p) {
+  const all = unitSlots(b, p).flat();
+  return all.some((s, i) => all.some((o, j) => j > i && o.k === s.k && o.a < s.d && s.a < o.d));
 }
 
 function collapse(u) {
   return u.every(s => s.k === u[0].k) ? [{ k: u[0].k, from: u[0].from, to: u.at(-1).to }] : u;
 }
 
-// The placement a booking would have if this piece went to kennel k
-
-const HOLD_MAX = 2;
 const nights = s => dayNum(s.to) - dayNum(s.from);
+
+// The placement a booking would have if this piece went to kennel k
 
 function proposal(b, piece, k) {
   const p = structuredClone(placementOf(b));
   if (isHolding(k)) {
     if (piece.part === 'pair' || piece.part === 'home') return null;
-    if (piece.part === 'whole' && (dayNum(b.depart) - dayNum(b.arrive) > HOLD_MAX || +b.cats > 2)) return null;
+    if (piece.part === 'whole' && (dayNum(b.depart) - dayNum(b.arrive) > HOLD_MAX || unitCats(b, piece.unit) > 2)) return null;
     if (piece.part === 'away' && nights(p[piece.unit][1]) > HOLD_MAX) return null;
   }
   if (piece.part === 'pair') {
@@ -510,7 +711,7 @@ function proposal(b, piece, k) {
     return [[seg(lo, b)], [seg(lo + 1, b)]];
   }
   if (piece.part === 'whole') {
-    if (+b.cats > 2 && +b.kennels === 1 && k !== 15) return null;
+    if (unitCats(b, piece.unit) > 2 && k !== 15) return null;
     p[piece.unit] = [seg(k, b)];
   } else if (piece.part === 'home') {
     const home = piece.home;
@@ -521,43 +722,95 @@ function proposal(b, piece, k) {
     p[piece.unit][1].k = k;
   }
   p[piece.unit] = collapse(p[piece.unit]);
-  return selfOverlap(p) ? null : p;
+  return selfOverlap(b, p) ? null : p;
 }
 
-// Work out a hand move. If one other booking is in the way, try swapping it into the
-// space this one leaves. Returns the rows to save, or an error to show.
+// Is lane k free over slots [a, d), ignoring some bookings?
+
+function laneFree(k, a, d, ignore) {
+  for (const c of closures) {
+    if (2 * dayNum(c.closed_from) + 1 < d && a < 2 * dayNum(c.reopens)) return false;
+  }
+  for (const o of bookings) {
+    if (ignore.has(o.id) || !o.placement) continue;
+    if (unitSlots(o).flat().some(s => s.k === k && s.a < d && a < s.d)) return false;
+  }
+  return true;
+}
+
+const canMove = o => o.arrive > TODAY && !o.locked;
+
+// Work out a hand move to kennel k. When another booking is in the way, first try moving it
+// somewhere else. If it can't move, move this cat out of kennel k for the nights it clashes,
+// into another kennel or a holding pen. Returns the rows to save, or an error to show.
 
 function planMove(b, piece, k) {
-  const p = proposal(b, piece, k);
   const name = b.name || 'That booking';
+  const p = proposal(b, piece, k);
   if (!p) return { error: isHolding(k) ? 'Holding pens take up to 2 cats for 2 nights at most, partway through a stay or for a short stay.' : `${name} can't go in ${kname(k)}.` };
   if (JSON.stringify(p) === JSON.stringify(b.placement)) return { same: true };
   const moved = { ...b, placement: p, locked: true };
   const others = bookings.filter(x => x.id !== b.id);
-  const inWay = blockers(others, b.id, p);
+  const inWay = blockers(others, b, p);
+  const lockedNote = 'It\u2019s locked, so Optimise leaves it there.';
   if (!inWay.length) {
     const held = holdNights(p).length ? ' This uses a holding pen.' : '';
-    return { rows: [moved], message: `Moved ${name} to ${describe(moved, p).toLowerCase()}. It's locked, so Optimise leaves it there.${held}` };
+    return { rows: [moved], message: `Moved ${name} to ${describe(moved, p).toLowerCase()}. ${lockedNote}${held}` };
   }
 
-  const from = piece.ks[0];
-  const other = byId(inWay[0]);
-  if (inWay.length === 1 && piece.part === 'whole' && from !== k && other.placement) {
-    const op = other.placement.map(u => collapse(u.map(s => (s.k === k ? { ...s, k: from } : s))));
-    const fits = !selfOverlap(op) && !(from !== 15 && +other.cats > 2 && +other.kennels === 1)
-      && !blockers(others.filter(x => x.id !== other.id).concat(moved), other.id, op).length;
-    if (fits) {
-      return { swap: true, rows: [moved, { ...other, placement: op }], message: `Swapped ${name} with ${other.name || 'another booking'}.` };
+  // Move the bookings in the way, if none of them has arrived or is locked
+
+  if (inWay.every(id => canMove(byId(id)))) {
+    const before = new Set(bookings.filter(x => !x.placement).map(x => x.id));
+    const list = others.map(o => (inWay.includes(o.id) ? { ...o, placement: null } : o)).concat(moved);
+    const res = plan(list, planOpts());
+    const ok = inWay.every(id => res.placements[id] && !res.moves.includes(id) && !res.holding.includes(id))
+      && res.unplaced.every(id => before.has(id));
+    if (ok) {
+      const rows = [moved, ...list.filter(o => o.id !== b.id && res.changed.includes(o.id)).map(o => ({ ...o, placement: res.placements[o.id] }))];
+      const shifted = rows.slice(1).map(o => `${o.name || 'another booking'} to ${describe(o, o.placement).toLowerCase()}`);
+      return { rows, message: `Moved ${name} to ${describe(moved, p).toLowerCase()}, and ${shifted.join(', ')} to make room. ${lockedNote}` };
     }
   }
-  const names = inWay.map(id => byId(id)?.name || 'another booking');
-  return { error: `${kname(k)[0].toUpperCase() + kname(k).slice(1)} is taken by ${names.slice(0, 2).join(' and ')}${names.length > 2 ? ' and others' : ''} on some of those nights.` };
+
+  // Otherwise move this cat out of kennel k while the other booking is there
+
+  const blockedBy = inWay.map(id => byId(id)?.name || 'another booking').slice(0, 2).join(' and ');
+  if (piece.part !== 'whole') return { error: `${cap(kname(k))} is taken by ${blockedBy} on some of those nights.` };
+  if (unitCats(b, piece.unit, p) > 1) return { error: `${cap(kname(k))} is taken by ${blockedBy} on some of those nights. Only a single cat can move kennels mid-stay.` };
+  const A = arriveSlot(b);
+  const D = departSlot(b);
+  const clash = inWay.flatMap(id => unitSlots(byId(id)).flat().filter(s => s.k === k && s.a < D && A < s.d));
+  let x = Math.min(...clash.map(s => Math.max(s.a, A)));
+  let y = Math.max(...clash.map(s => Math.min(s.d, D)));
+  x -= x % 2;
+  y += y % 2;
+  const ignore = new Set([b.id]);
+  if (x <= A || y >= D) return { error: `${blockedBy} ${inWay.length > 1 ? 'are' : 'is'} in ${kname(k)} when ${name} arrives or leaves, so ${name} can't start or end there.` };
+  const away = [...Array.from({ length: KENNELS }, (_, i) => i + 1).sort((m, n) => Math.abs(m - k) - Math.abs(n - k)), ...((y - x) / 2 <= HOLD_MAX ? HOLDING : [])];
+  const own = p.filter((u, i) => i !== piece.unit).flat().map(s => s.k);
+  const k2 = away.find(j => j !== k && !own.includes(j) && laneFree(j, x, y, ignore));
+  if (!k2) return { error: `${cap(kname(k))} is taken by ${blockedBy}, and there's nowhere free to move ${name} to in the meantime.` };
+  const mid = [{ k, from: b.arrive, to: isoDay(x / 2) }, { k: k2, from: isoDay(x / 2), to: isoDay(y / 2) }, { k, from: isoDay(y / 2), to: b.depart }];
+  const p2 = p.map((u, i) => (i === piece.unit ? mid : u));
+  const moved2 = { ...b, placement: p2, locked: true };
+  if (blockers(others, b, p2).length) return { error: `${cap(kname(k))} is taken by ${blockedBy} on some of those nights.` };
+  const held = isHolding(k2) ? ' This uses a holding pen.' : '';
+  return {
+    rows: [moved2],
+    detour: true,
+    message: `Moved ${name} to ${kname(k)}. While ${blockedBy} ${inWay.length > 1 ? 'are' : 'is'} there, ${name} moves to ${kname(k2)} from ${niceDate(isoDay(x / 2))} to ${niceDate(isoDay(y / 2))}. ${lockedNote}${held}`
+  };
 }
 
 function moveTo(b, piece, k) {
   const m = planMove(b, piece, k);
   if (m.error) toast(m.error);
-  else if (m.rows) commit(m.rows, m.message);
+  else if (m.rows) {
+    const held = m.rows.flatMap(r => holdNights(r.placement));
+    if (held.length && !confirm(`This move puts ${b.name || 'a cat'} in ${kname(held[0].k)} from ${niceDate(held[0].from)} to ${niceDate(held[0].to)}. Go ahead?`)) return;
+    commit(m.rows, m.message);
+  }
 }
 
 const lanes = $('lanes');
@@ -570,6 +823,8 @@ lanes.addEventListener('pointerdown', e => {
   drag = { card, ...pieces.get(card.dataset.key), x0: e.clientX, y0: e.clientY, started: false };
   card.setPointerCapture(e.pointerId);
 });
+
+// While dragging, green means free, orange means something has to move, red means it can't go there
 
 lanes.addEventListener('pointermove', e => {
   if (!drag) return;
@@ -589,9 +844,10 @@ lanes.addEventListener('pointermove', e => {
   const width = wide && k < 15 ? laneX(k + 1) + L.colW - laneX(k) - 4 : laneW(k) - 4;
   drag.ghost.style.left = `${laneX(k) + 2}px`;
   drag.ghost.style.width = `${width}px`;
-  const m = planMove(drag.b, drag.piece, k);
-  drag.ghost.classList.toggle('bad', !!m.error);
-  drag.ghost.classList.toggle('swap', !!m.swap);
+  const p = proposal(drag.b, drag.piece, k);
+  const busy = p && blockers(bookings.filter(o => o.id !== drag.b.id), drag.b, p).length > 0;
+  drag.ghost.classList.toggle('bad', !p);
+  drag.ghost.classList.toggle('swap', !!busy);
 });
 
 const endDrag = e => {
@@ -611,7 +867,7 @@ lanes.addEventListener('pointercancel', endDrag);
 lanes.addEventListener('click', e => {
   const card = e.target.closest('.card');
   if (!card || justDragged) return;
-  if (preview) return toast('Apply or cancel the optimiser’s changes first.');
+  if (preview) return toast('Apply or cancel the optimiser\u2019s changes first.');
   openPanel(pieces.get(card.dataset.key).b);
 });
 
@@ -640,26 +896,41 @@ form.cats.addEventListener('change', () => {
   syncJoin();
 });
 
+// Arrival and departure times: not set, morning, afternoon, or a time of day
+
+const setTime = (which, t) => {
+  form[`${which}_when`].value = t === 'am' || t === 'pm' || !t ? t || '' : 'at';
+  form[`${which}_at`].value = /^\d\d:\d\d$/.test(t || '') ? t : '';
+  form[`${which}_at`].hidden = form[`${which}_when`].value !== 'at';
+};
+const getTime = which => (form[`${which}_when`].value === 'at' ? form[`${which}_at`].value : form[`${which}_when`].value);
+for (const which of ['arrive', 'depart']) {
+  form[`${which}_when`].addEventListener('change', () => {
+    form[`${which}_at`].hidden = form[`${which}_when`].value !== 'at';
+    if (!form[`${which}_at`].hidden) form[`${which}_at`].focus();
+  });
+}
+
 function renderWhere(b) {
-  const where = $('where');
+  const box = $('where');
   const p = b?.placement;
   if (!b || !byId(b.id)) {
-    where.innerHTML = '<p>Fill in the stay and save. The board finds the best kennel for it.</p>';
+    box.innerHTML = '<p>Fill in the stay and save. The board finds the best kennel for it.</p>';
     return;
   }
   const closed = closureDuring(b);
-  let html = p ? `<p><b>${esc(describe(b, p))}</b></p>` : '<p class="warn">No kennel yet. There’s no room on these dates as the board stands.</p>';
+  let html = p ? `<p><b>${esc(describe(b, p))}</b></p>` : '<p class="warn">No kennel yet. There\u2019s no room on these dates as the board stands.</p>';
   if (closed) html += `<p class="warn">This stay falls in a closure, ${esc(niceDate(closed.closed_from))} until ${esc(niceDate(closed.reopens))}.</p>`;
   const held = holdNights(p);
   if (held.length) html += `<p class="warn">Uses ${esc(kname(held[0].k))} from ${esc(niceDate(held[0].from))} to ${esc(niceDate(held[0].to))}.</p>`;
   if (p) {
-    const options = isPair(p) || (p.length === 1 && +b.kennels === 2)
-      ? [...PAIRS.map(([x, y]) => [x, `Kennels ${x} and ${y}`]), ...(allows15(b) ? [[15, 'Kennel 15']] : [])].map(([v, label]) => `<option value="${v}">${label}</option>`).join('')
-      : null;
-    if (options) {
+    const pairy = isPair(p) || (p.length === 1 && +b.kennels === 2);
+    if (pairy) {
+      const options = [...PAIRS.map(([x, y]) => [x, `Kennels ${x} and ${y}`]), ...(allows15(b) ? [[15, 'Kennel 15']] : [])]
+        .map(([v, label]) => `<option value="${v}">${label}</option>`).join('');
       const cur = Math.min(...p.map(u => u[0].k));
       html += `<label class="field"><span>Move to</span><select data-pair>${options}</select></label>`;
-      setTimeout(() => (where.querySelector('[data-pair]').value = cur));
+      setTimeout(() => (box.querySelector('[data-pair]').value = cur));
     } else {
       p.forEach((u, i) => {
         if (u.length > 1) return;
@@ -667,9 +938,9 @@ function renderWhere(b) {
         html += `<label class="field"><span>${p.length > 1 ? `Kennel for cat group ${i + 1}` : 'Move to'}</span><select data-unit="${i}">${opts}</select></label>`;
       });
     }
-    html += `<label class="check"><input type="checkbox" data-lock${b.locked ? ' checked' : ''}><span>Lock in place, so Optimise won’t move it</span></label>`;
+    html += `<label class="check"><input type="checkbox" data-lock${b.locked ? ' checked' : ''}><span>Lock in place, so Optimise won\u2019t move it</span></label>`;
   }
-  where.innerHTML = html;
+  box.innerHTML = html;
 }
 
 $('where').addEventListener('change', e => {
@@ -697,6 +968,10 @@ function openPanel(b) {
   form.kennels.value = v.kennels;
   form.joined.checked = !!v.joined;
   form.new_customer.checked = !!v.new_customer;
+  form.deposit_paid.checked = !!v.deposit_paid;
+  form.bill_paid.checked = !!v.bill_paid;
+  setTime('arrive', v.arrive_time);
+  setTime('depart', v.depart_time);
   syncJoin();
   const contact = [];
   if (v.phone) contact.push(`<a href="tel:${esc(v.phone)}">Call</a>`, `<a href="sms:${esc(v.phone.replace(/[^\d+]/g, ''))}">Text</a>`);
@@ -721,7 +996,7 @@ document.addEventListener('keydown', e => {
 });
 
 $('add').addEventListener('click', () => {
-  if (preview) return toast('Apply or cancel the optimiser’s changes first.');
+  if (preview) return toast('Apply or cancel the optimiser\u2019s changes first.');
   openPanel(null);
 });
 
@@ -732,6 +1007,8 @@ $('save').addEventListener('click', async () => {
     email: form.email.value.trim(),
     arrive: form.arrive.value,
     depart: form.depart.value,
+    arrive_time: getTime('arrive'),
+    depart_time: getTime('depart'),
     cats: +form.cats.value,
     kennels: +form.kennels.value,
     joined: +form.kennels.value > 1 && form.joined.checked,
@@ -739,20 +1016,25 @@ $('save').addEventListener('click', async () => {
     diet: form.diet.value.trim(),
     meds: form.meds.value.trim(),
     notes: form.notes.value.trim(),
-    new_customer: form.new_customer.checked
+    new_customer: form.new_customer.checked,
+    deposit_paid: form.deposit_paid.checked,
+    bill_paid: form.bill_paid.checked
   };
   if (!fields.name) return toast('Add a name first.');
   if (!fields.arrive || !fields.depart || fields.depart <= fields.arrive) return toast('The leaving date needs to be after the arrival date.');
   if (fields.cats > fields.kennels * 2 + (fields.kennels === 1 ? 1 : 0)) return toast(`${plural(fields.cats, 'cat')} need more kennels than that.`);
 
+  // Keep the kennel unless the stay changed shape, or new times clash with a neighbour
+
   const old = byId(openId);
-  const needsKennel = !old || ['arrive', 'depart', 'cats', 'kennels', 'joined'].some(f => String(old[f]) !== String(fields[f]));
-  if (old && !needsKennel) {
+  const reshaped = !old || ['arrive', 'depart', 'cats', 'kennels', 'joined'].some(f => String(old[f]) !== String(fields[f]));
+  const updated = old ? { ...old, ...fields } : null;
+  if (old && !reshaped && (!old.placement || !blockers(bookings.filter(o => o.id !== old.id), updated, old.placement).length)) {
     closePanel();
-    return commit([{ ...old, ...fields }], 'Saved.');
+    return commit([updated], 'Saved.');
   }
 
-  const row = old ? { ...old, ...fields, placement: null, locked: false } : store.blank(fields);
+  const row = old ? { ...updated, placement: null, locked: false } : store.blank(fields);
   const closed = closureDuring(row);
   if (closed && !confirm(`We're closed from ${niceDate(closed.closed_from)} until ${niceDate(closed.reopens)}, so this stay can't have a kennel. Save it anyway?`)) return;
   const list = bookings.filter(b => b.id !== row.id).concat(row);
@@ -774,14 +1056,14 @@ $('save').addEventListener('click', async () => {
   closePanel();
   const msg = placed.placement
     ? `${old ? 'Saved' : 'Added'}, in ${describe(placed).toLowerCase()}${moved ? `. ${plural(moved, 'other booking')} moved to make room` : ''}${heldIds.length ? '. Uses a holding pen' : ''}.`
-    : 'Saved, but there’s no room on those dates. It’s listed above the board.';
+    : 'Saved, but there\u2019s no room on those dates. It\u2019s listed above the board.';
   await commit(changed, msg);
   focusBooking(row.id, false);
 });
 
 $('delete').addEventListener('click', async () => {
   const b = byId(openId);
-  if (!b || !confirm(`Delete the booking for ${b.name || 'this customer'}? This can’t be undone.`)) return;
+  if (!b || !confirm(`Delete the booking for ${b.name || 'this customer'}? This can\u2019t be undone.`)) return;
   closePanel();
   bookings = bookings.filter(x => x.id !== b.id);
   render();
@@ -925,7 +1207,7 @@ $('login-form').addEventListener('submit', async e => {
     await store.signIn(f.email.value.trim(), f.password.value);
     showApp();
   } catch (error) {
-    err.textContent = error.message || 'Couldn’t sign in.';
+    err.textContent = error.message || 'Couldn\u2019t sign in.';
     err.hidden = false;
   }
 });

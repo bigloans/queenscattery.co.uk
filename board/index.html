@@ -27,7 +27,7 @@
     --radius: 12px;
     --shadow: 0 8px 30px rgba(31, 36, 32, .18);
 
-    --row: 28px;
+    --row: 30px;
     --date-w: 128px;
     --head-h: 44px;
   }
@@ -58,7 +58,7 @@
 
   /* Fields */
 
-  .field { display: grid; gap: 4px; }
+  .field { display: grid; gap: 4px; align-content: start; }
   .field > span { font-weight: 500; font-size: .85rem; color: var(--muted); }
   .field input, .field select, .field textarea { width: 100%; padding: 8px 10px; background: var(--cream); border: 1px solid #d3ccbb; border-radius: 8px; }
   .field textarea { resize: vertical; min-height: 60px; }
@@ -68,7 +68,7 @@
 
   /* App shell */
 
-  .app { display: grid; grid-template-rows: auto auto 1fr; height: 100%; }
+  .app { display: grid; grid-template-rows: auto auto auto 1fr; grid-template-columns: minmax(0, 1fr); height: 100%; }
   .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 16px; background: var(--paper); border-bottom: 1px solid var(--line); }
   .bar h1 { margin-right: auto; }
   .bar-nav { display: flex; align-items: center; gap: 6px; }
@@ -90,6 +90,33 @@
   .notice .grow { flex: 1 1 260px; }
   .chip { border: 1px solid var(--line); background: var(--paper); border-radius: 999px; padding: 3px 10px; cursor: pointer; font-size: .85rem; }
   .chip:hover { border-color: var(--accent); }
+
+  /* Jobs for the day */
+
+  .jobs { background: var(--paper); border-bottom: 1px solid var(--line); padding: 8px 16px 10px; }
+  .jobs-bar { display: flex; align-items: center; gap: 8px; }
+  .jobs-bar h2 { font-size: 1.05rem; min-width: 0; }
+  .jobs-bar .muted { margin-left: 4px; }
+  #jobs-toggle { margin-left: auto; }
+  .tickets { display: flex; gap: 10px; overflow-x: auto; padding: 10px 2px 4px; scroll-snap-type: x proximity; }
+  .tickets > .muted { padding: 4px 0; }
+  .ticket { flex: 0 0 250px; scroll-snap-align: start; background: var(--cream); border: 1px solid var(--line); border-left: 4px solid var(--tc, var(--green)); border-radius: 10px; padding: 8px 10px; display: grid; gap: 4px; align-content: start; font-size: .85rem; }
+  .ticket.in { --tc: #3f8a4f; }
+  .ticket.out { --tc: var(--accent); }
+  .ticket.turn { --tc: #7a5aa6; flex-basis: 290px; }
+  .ticket.move { --tc: #3b78a8; }
+  .ticket header { display: flex; align-items: center; gap: 8px; }
+  .ticket .tag { background: var(--tc); color: #fff; border-radius: 999px; padding: 1px 8px; font-size: .72rem; font-weight: 600; }
+  .ticket .where { font-weight: 600; color: var(--green-deep); }
+  .ticket .tname { all: unset; cursor: pointer; font-weight: 600; font-size: .92rem; }
+  .ticket .tname:hover, .ticket .tname:focus-visible { text-decoration: underline; }
+  .ticket small { color: var(--muted); display: block; }
+  .ticket .leg { display: grid; gap: 2px; padding-top: 4px; }
+  .ticket .leg + .leg { border-top: 1px dashed var(--line); margin-top: 2px; }
+  .ticket .dir { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .pay { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 2px; }
+  .pay label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+  .pay input { width: 16px; height: 16px; margin: 0; accent-color: var(--green); }
 
   /* Timeline */
 
@@ -177,6 +204,9 @@
     .bar-actions { flex-wrap: wrap; }
     .date { padding: 0 6px; font-size: .72rem; }
     .date .free { display: none; }
+    .jobs { padding: 6px 12px 8px; }
+    .ticket { flex-basis: 78vw; }
+    #jobs-today { display: none; }
     .card { font-size: .68rem; padding: 2px 4px; }
     .card span { display: none; }
     .panel { top: auto; height: 88%; border-left: 0; border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; }
@@ -217,9 +247,20 @@
     </div>
   </header>
   <div class="notices" id="notices"></div>
+  <section class="jobs" aria-labelledby="jobs-day">
+    <div class="jobs-bar">
+      <button class="btn icon" id="jobs-prev" aria-label="Previous day">‹</button>
+      <h2 id="jobs-day">Today</h2>
+      <button class="btn icon" id="jobs-next" aria-label="Next day">›</button>
+      <button class="btn" id="jobs-today">Today</button>
+      <span class="muted" id="jobs-count"></span>
+      <button class="btn" id="jobs-toggle">Hide</button>
+    </div>
+    <div class="tickets" id="tickets"></div>
+  </section>
   <div class="scroller" id="scroller">
     <div class="sheet" id="sheet">
-      <div class="head"><div class="corner">Night of</div><div class="heads" id="heads"></div></div>
+      <div class="head"><div class="corner">Day</div><div class="heads" id="heads"></div></div>
       <div class="body"><div class="dates" id="dates"></div><div class="lanes" id="lanes"></div></div>
     </div>
   </div>
@@ -245,6 +286,18 @@
       <label class="field"><span>Leaves</span><input name="depart" type="date" required></label>
     </div>
     <div class="row2">
+      <div class="field">
+        <span>Arrival time</span>
+        <select name="arrive_when" aria-label="Arrival time"><option value="">Not set</option><option value="am">Morning</option><option value="pm">Afternoon</option><option value="at">Specific time</option></select>
+        <input name="arrive_at" type="time" aria-label="Arrival time of day" hidden>
+      </div>
+      <div class="field">
+        <span>Leaving time</span>
+        <select name="depart_when" aria-label="Leaving time"><option value="">Not set</option><option value="am">Morning</option><option value="pm">Afternoon</option><option value="at">Specific time</option></select>
+        <input name="depart_at" type="time" aria-label="Leaving time of day" hidden>
+      </div>
+    </div>
+    <div class="row2">
       <label class="field"><span>Cats</span><select name="cats"></select></label>
       <label class="field"><span>Kennels</span><select name="kennels"></select></label>
     </div>
@@ -254,6 +307,9 @@
     <label class="field"><span>Medication</span><textarea name="meds" rows="2"></textarea></label>
     <label class="field"><span>Notes</span><textarea name="notes" rows="2"></textarea></label>
     <label class="check"><input type="checkbox" name="new_customer"><span>New customer</span></label>
+    <div class="section-label">Payments</div>
+    <label class="check"><input type="checkbox" name="deposit_paid"><span>Deposit paid</span></label>
+    <label class="check"><input type="checkbox" name="bill_paid"><span>Bill paid</span></label>
   </form>
   <footer>
     <button class="btn danger" id="delete" type="button">Delete</button>
