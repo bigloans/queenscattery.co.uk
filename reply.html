@@ -48,7 +48,7 @@
   .field > span { display: block; font-weight: 500; font-size: .95rem; margin-bottom: 6px; }
   .check { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 18px; cursor: pointer; }
   .check input { width: 20px; height: 20px; margin: 3px 0 0; accent-color: var(--green); flex: none; }
-  input[type=text], textarea {
+  input[type=text], input[type=email], input[type=password], textarea {
     width: 100%; font: inherit; color: var(--ink);
     padding: 11px 14px; background: var(--cream);
     border: 1px solid #d3ccbb; border-radius: 10px;
@@ -104,6 +104,17 @@
       <a class="btn btn-primary" id="send-text" hidden>Reply by text</a>
       <button type="button" class="btn btn-outline" id="copy">Copy message</button>
     </div>
+  </section>
+
+  <section class="panel" id="board" hidden>
+    <h2>Kennel board</h2>
+    <p id="board-status">Checking the board…</p>
+    <form id="board-login" hidden>
+      <label class="field"><span>Email</span><input type="email" name="email" autocomplete="username" required></label>
+      <label class="field"><span>Password</span><input type="password" name="password" autocomplete="current-password" required></label>
+      <button class="btn btn-outline" type="submit">Sign in to the board</button>
+    </form>
+    <button type="button" class="btn btn-primary" id="board-add" hidden>Add to board</button>
   </section>
 </main>
 
@@ -212,6 +223,118 @@
   });
 
   render();
+</script>
+
+<script type="module">
+  import { plan } from './app/planner.js';
+  import * as store from './app/store.js';
+
+  const q = new URLSearchParams(location.search);
+  const $ = id => document.getElementById(id);
+  const stays = q.getAll('stay').map(s => s.split('_'));
+  const cats = +q.get('cats') || 1;
+  const kennels = +q.get('kennels') || (cats === 3 ? 2 : Math.ceil(cats / 2));
+  const name = q.get('name') || '';
+  const phone = q.get('phone') || '';
+  const shortDate = iso => new Date(iso + 'T12:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const sourceOf = ([from, to]) => `${name}|${phone}|${from}_${to}`.toLowerCase();
+
+  // Where a placement puts the cats, in words
+
+  const where = p => {
+    if (p.length === 2 && p.every(u => u.length === 1) && Math.abs(p[0][0].k - p[1][0].k) === 1 && Math.min(p[0][0].k, p[1][0].k) % 2) {
+      return `kennels ${Math.min(p[0][0].k, p[1][0].k)} and ${Math.max(p[0][0].k, p[1][0].k)}, joined`;
+    }
+    const ks = p.map(u => u[0].k);
+    const mid = p.some(u => u.length > 1) ? ', with a move mid-stay' : '';
+    return `${ks.length > 1 ? 'kennels' : 'kennel'} ${ks.join(' and ')}${mid}`;
+  };
+
+  const rowsFor = () => stays.map(stay => store.blank({
+    source: sourceOf(stay),
+    name,
+    email: q.get('email') || '',
+    phone,
+    cats,
+    cat_names: $('names').value.trim(),
+    kennels,
+    joined: q.get('join') === '1',
+    arrive: stay[0],
+    depart: stay[1],
+    diet: q.get('diet') || '',
+    meds: q.get('meds') || '',
+    new_customer: q.get('new') === '1'
+  }));
+
+  let all = [];
+
+  async function check() {
+    $('board-login').hidden = true;
+    $('board-add').hidden = true;
+    $('board-status').textContent = 'Checking the board…';
+    try {
+      all = await store.load();
+    } catch (err) {
+      $('board-status').textContent = `Couldn't load the board: ${err.message}`;
+      return;
+    }
+    const rows = rowsFor();
+    const done = rows.map(r => all.find(b => b.source === r.source));
+    const fresh = rows.filter((r, i) => !done[i]);
+    const res = plan([...all, ...fresh]);
+    const freshIds = new Set(fresh.map(r => r.id));
+    const moved = res.changed.filter(id => !freshIds.has(id)).length;
+
+    const lines = rows.map((r, i) => {
+      const dates = `${shortDate(r.arrive)} to ${shortDate(r.depart)}`;
+      if (done[i]) return `${dates}: already on the board${done[i].placement ? `, in ${where(done[i].placement)}` : ', with no kennel yet'}.`;
+      const p = res.placements[r.id];
+      return p ? `${dates}: fits in ${where(p)}.` : `${dates}: no room as the board stands.`;
+    });
+    if (fresh.length && moved) lines.push(`${plural(moved, 'other booking')} would move to make room.`);
+    $('board-status').innerHTML = lines.map(l => `<span style="display:block">${l.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</span>`).join('');
+    $('board-add').hidden = !fresh.length || document.querySelector('[name=answer]:checked').value !== 'yes';
+  }
+
+  $('board-add').addEventListener('click', async () => {
+    const btn = $('board-add');
+    btn.disabled = true;
+    try {
+      const rows = rowsFor().filter(r => !all.some(b => b.source === r.source));
+      const { unplaced } = await store.addAndPlace(rows, all);
+      await check();
+      if (unplaced.length) $('board-status').append(' It’s saved and listed above the board, so you can make room for it there.');
+    } catch (err) {
+      $('board-status').textContent = `Couldn't add it: ${err.message}`;
+    }
+    btn.disabled = false;
+  });
+
+  $('board-login').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+      await store.signIn(e.target.email.value.trim(), e.target.password.value);
+      check();
+    } catch (err) {
+      $('board-status').textContent = err.message || 'Couldn’t sign in.';
+    }
+  });
+
+  // Only offer to add the booking when the reply says we can take them
+
+  document.querySelectorAll('[name=answer]').forEach(el => el.addEventListener('change', () => {
+    if ($('board-login').hidden) check();
+  }));
+
+  if (stays.length && !store.demo) {
+    $('board').hidden = false;
+    if (await store.signedIn()) check();
+    else {
+      $('board-status').textContent = 'Sign in to see whether this fits and add it to the board.';
+      $('board-login').hidden = false;
+    }
+  }
 </script>
 </body>
 </html>

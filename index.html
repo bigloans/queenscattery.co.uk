@@ -843,7 +843,9 @@
       data['Estimated cost'] = `${gbp(total)} at ${gbp(rate)} a night`;
       data.Deposit = isNew ? `${gbp(cats * DEPOSIT)} (${gbp(DEPOSIT)} per cat)` : 'None, returning customer';
 
-      const reply = new URLSearchParams({ name, email, phone, cats, names: f.catDetails.value.trim(), new: isNew ? 1 : 0 });
+      const reply = new URLSearchParams({ name, email, phone, cats, kennels, join: kennels > 1 && f.join.checked ? 1 : 0, names: f.catDetails.value.trim(), new: isNew ? 1 : 0 });
+      if (f.needsDiet.checked) reply.set('diet', f.diet.value.trim() || 'Yes, details to follow');
+      if (f.needsMeds.checked) reply.set('meds', f.meds.value.trim() || 'Yes, details to follow');
       stays.forEach(s => reply.append('stay', `${s.from}_${s.to}`));
       data['Quick reply'] = `${REPLY_URL}?${reply}`;
     }
